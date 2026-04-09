@@ -7,6 +7,7 @@
 .idea/
 *.user
 *.suo
+msi/Output
 
 # Bỏ qua các file log và thông tin môi trường cục bộ
 *.log
