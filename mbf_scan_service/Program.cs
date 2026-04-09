@@ -6,10 +6,8 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Configuration;
 using mbf_scan_service.Controllers;
 using System.Text.Json;
-using System.Windows.Forms;
 
 namespace mbf_scan_service;
 

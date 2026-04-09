@@ -85,7 +85,7 @@ public partial class Form1 : Form
         };
 
         // Load generated icon
-        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "scanner.ico");
+        var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Resource\\scan.ico");
         if (File.Exists(iconPath))
         {
             try
@@ -104,9 +104,10 @@ public partial class Form1 : Form
 
         var contextMenu = new ContextMenuStrip();
 
-        contextMenu.Items.Add("Show Window", null, (_, _) => ShowWindow());
+        contextMenu.Items.Add("Hiển thị màn hình", null, (_, _) => ShowWindow());
+        contextMenu.Items.Add("Khởi động lại", null, (_, _) => RestartApplication());
         contextMenu.Items.Add("-");
-        contextMenu.Items.Add("Exit", null, (_, _) => ExitApplication());
+        contextMenu.Items.Add("Thoát", null, (_, _) => ExitApplication());
 
         _notifyIcon.ContextMenuStrip = contextMenu;
         _notifyIcon.DoubleClick += (_, _) => ShowWindow();
@@ -130,6 +131,15 @@ public partial class Form1 : Form
         Show();
         WindowState = FormWindowState.Normal;
         Activate();
+    }
+
+    private void RestartApplication()
+    {
+        Log.Information("Restarting application...");
+        _notifyIcon?.Dispose();
+        LoggingSetup.Shutdown();
+
+        Application.Restart();
     }
 
     private void ExitApplication()
