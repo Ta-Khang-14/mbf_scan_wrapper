@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -10,7 +10,14 @@
     <AssemblyName>mbf_scan_service</AssemblyName>
     <RootNamespace>mbf_scan_service</RootNamespace>
     <PlatformTarget>x86</PlatformTarget>
+    <ApplicationIcon>Resource\scan.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Resource\scan.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
   <ItemGroup>
     <None Remove="tessdata\eng.traineddata" />

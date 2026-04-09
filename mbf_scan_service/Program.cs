@@ -1,7 +1,6 @@
 using mbf_scan_service.Logging;
 using mbf_scan_service.Models;
 using mbf_scan_service.Services;
-using mbf_scan_service.Helpers;
 using Serilog;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -78,20 +77,6 @@ internal static class Program
             );
 
             ApplicationConfiguration.Initialize();
-
-            // Generate scanner icon if not exists
-            var iconPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "scanner.ico");
-            if (!File.Exists(iconPath))
-            {
-                try
-                {
-                    IconGenerator.GenerateScannerIcon(AppDomain.CurrentDomain.BaseDirectory);
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "Failed to generate icon, using default");
-                }
-            }
 
             var form = new Form1();
             form.ShowInTaskbar = true;
