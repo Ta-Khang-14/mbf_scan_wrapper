@@ -1,0 +1,14 @@
+# Bỏ qua các thư mục build của .NET
+[Bb]in/
+[Oo]bj/
+
+# Bỏ qua thư mục cấu hình ẩn của IDE (Visual Studio, Rider)
+.vs/
+.idea/
+*.user
+*.suo
+
+# Bỏ qua các file log và thông tin môi trường cục bộ
+*.log
+appsettings.Development.json
+appsettings.local.json

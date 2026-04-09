@@ -1,0 +1,272 @@
+{
+	"info": {
+		"name": "MBF Scan Service API",
+		"description": "Postman collection for MBF Scan Service - API đặc tả cho FE tích hợp",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "System",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": ["{{baseUrl}}"],
+							"path": ["health"]
+						},
+						"description": "Kiểm tra trạng thái service"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Scanner",
+			"item": [
+				{
+					"name": "1. List Scanners",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/list",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "list"]
+						},
+						"description": "Lấy danh sách máy scan khả dụng"
+					},
+					"response": []
+				},
+				{
+					"name": "2. Scan",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"scannerName\": \"FUJITSU fi-760\",\n  \"settings\": {\n    \"dpi\": 300,\n    \"colorMode\": \"Color\",\n    \"paperSize\": \"A4\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/scan",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "scan"]
+						},
+						"description": "Khởi tạo session và quét (blocking - đợi user scan xong). Sau khi nhận response, copy giá trị `sessionId` vào biến {{sessionId}} để dùng cho các API tiếp theo.\n\nLưu ý: MaxPages (mặc định 400) và EnableDuplex (mặc định true) được thiết lập từ server config, client không gửi được."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Get Pages",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/pages",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "pages"]
+						},
+						"description": "Lấy danh sách pages đã quét. Mỗi page có imageUrl và pdfUrl để xem trước."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Get Page Preview",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('Status code is 200', function() {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/preview/0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "preview", "0"]
+						},
+						"description": "Xem preview hình ảnh của page index 0. Trả về hình ảnh (JPEG/PNG/TIFF).\n\nThay đổi số cuối URL để xem page khác (0-based index)."
+					},
+					"response": []
+				},
+				{
+					"name": "5. Get Page PDF",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/page-pdf/0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "page-pdf", "0"]
+						},
+						"description": "Lấy file PDF của page index 0. Trả về file PDF.\n\nThay đổi số cuối URL để xem page khác (0-based index)."
+					},
+					"response": []
+				},
+				{
+					"name": "6. Delete Page",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/pages/0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "pages", "0"]
+						},
+						"description": "Xóa page tại index 0. Trả về danh sách pages còn lại sau khi xóa.\n\nThay đổi số cuối URL để xóa page khác (0-based index)."
+					},
+					"response": []
+				},
+				{
+					"name": "7. Process Scan",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"number\": 12345678\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "process"]
+						},
+						"description": "Xử lý barcode detection, nhóm pages, tạo PDF và OCR.\n\nFE truyền \"number\" (số hồ sơ) trong body. File sẽ được đặt tên theo rule: {Number}_ddMMyyyy_HHmmss.pdf\n\nTrả về danh sách file với downloadUrl (full URL) - FE có thể dùng trực tiếp để download."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Files",
+			"item": [
+				{
+					"name": "Download File",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/files/{fileId}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "files", "{fileId}"]
+						},
+						"description": "Download file PDF bằng fileId.\n\nThay {fileId} bằng giá trị từ response của Process Scan (trường files[].fileId).\n\nHoặc sử dụng trực tiếp downloadUrl từ Process Scan response."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Stored Files",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/stored-files",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "stored-files"]
+						},
+						"description": "Lấy danh sách tất cả file PDF đã được tạo và lưu trữ.\n\nMỗi file có downloadUrl (full URL) để FE download trực tiếp."
+					},
+					"response": []
+				},
+				{
+					"name": "Get File (PDF - inline)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/files/{fileId}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "files", "{fileId}"]
+						},
+						"description": "Lấy file PDF để hiển thị inline (không force download).\n\nThay {fileId} bằng giá trị từ response của Process Scan hoặc stored-files."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete File",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/files/{fileId}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "files", "{fileId}"]
+						},
+						"description": "Xóa file PDF đã lưu.\n\nThay {fileId} bằng giá trị từ response của Process Scan hoặc stored-files."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000",
+			"type": "string"
+		},
+		{
+			"key": "sessionId",
+			"value": "",
+			"type": "string",
+			"description": "Session ID - copy từ response của Scan API sau khi quét xong"
+		},
+		{
+			"key": "fileId",
+			"value": "",
+			"type": "string",
+			"description": "File ID - copy từ response của Process Scan hoặc stored-files"
+		}
+	]
+}

@@ -1,0 +1,249 @@
+namespace mbf_scan_service.Services;
+
+using mbf_scan_service.Models;
+using Serilog;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using ZXing;
+using ZXing.Common;
+using static ZXing.RGBLuminanceSource;
+
+public class BarcodeService
+{
+    private const string DefaultBarcodePattern = "Barcode Sperate Page";
+
+    public BarcodeService()
+    {
+        Log.Information("BarcodeService initialized with pattern: {Pattern}", DefaultBarcodePattern);
+    }
+
+    public BarcodeDetectionResult? DetectBarcode(string imagePath)
+    {
+        return DetectBarcodeAsync(imagePath).GetAwaiter().GetResult();
+    }
+
+    public async Task<BarcodeDetectionResult?> DetectBarcodeAsync(string imagePath)
+    {
+        if (!File.Exists(imagePath))
+        {
+            Log.Warning("Image file not found: {Path}", imagePath);
+            return null;
+        }
+
+        try
+        {
+            var imageBytes = await File.ReadAllBytesAsync(imagePath);
+            return DetectBarcodeFromBytes(imageBytes);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error detecting barcode from file: {Path}", imagePath);
+            return null;
+        }
+    }
+
+    public BarcodeDetectionResult? DetectBarcodeFromBytes(byte[] imageBytes)
+    {
+        try
+        {
+            using var image = Image.Load<Rgba32>(imageBytes);
+            var width = image.Width;
+            var height = image.Height;
+
+            Log.Information("[BarcodeDebug] Image loaded: Width={Width}, Height={Height}, ByteArrayLength={ByteArrayLength}",
+                width, height, imageBytes.Length);
+
+            // Thử quét từng vùng: trên → dưới → toàn trang
+            var regions = new[]
+            {
+                new { Name = "TOP", YStart = 0, YEnd = (int)(height * 0.35) },
+                new { Name = "BOTTOM", YStart = (int)(height * 0.65), YEnd = height },
+                new { Name = "FULL", YStart = 0, YEnd = height }
+            };
+
+            foreach (var region in regions)
+            {
+                Log.Information("[BarcodeDebug] Trying region: {Region}, Y={YStart}-{YEnd}",
+                    region.Name, region.YStart, region.YEnd);
+
+                var result = TryDecodeRegion(image, region.YStart, region.YEnd);
+                if (result?.Found == true)
+                {
+                    result.RegionScanned = region.Name;
+                    return result;
+                }
+            }
+
+            Log.Warning("[BarcodeDebug] Barcode not detected in any region");
+            return new BarcodeDetectionResult { Found = false };
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error in barcode detection");
+            return new BarcodeDetectionResult { Found = false, Error = ex.Message };
+        }
+    }
+
+    private BarcodeDetectionResult? TryDecodeRegion(Image<Rgba32> image, int yStart, int yEnd)
+    {
+        var width = image.Width;
+        var regionHeight = yEnd - yStart;
+        var totalPixels = width * regionHeight;
+
+        var source = new byte[totalPixels];
+        byte minVal = 255, maxVal = 0;
+        long sumVal = 0;
+
+        for (int y = yStart; y < yEnd; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                var pixel = image[x, y];
+                byte gray = (byte)((pixel.R + pixel.G + pixel.B) / 3);
+                source[(y - yStart) * width + x] = gray;
+
+                if (gray < minVal) minVal = gray;
+                if (gray > maxVal) maxVal = gray;
+                sumVal += gray;
+            }
+        }
+
+        double avgVal = (double)sumVal / totalPixels;
+        int contrastRange = maxVal - minVal;
+
+        Log.Information("[BarcodeDebug] Region stats: Height={Height}, Min={MinVal}, Max={MaxVal}, Avg={AvgVal:F2}, ContrastRange={ContrastRange}",
+            regionHeight, minVal, maxVal, avgVal, contrastRange);
+
+        var luminanceSource = new RGBLuminanceSource(source, width, regionHeight, BitmapFormat.Gray8);
+
+        var hints = new Dictionary<DecodeHintType, object>
+        {
+            { DecodeHintType.POSSIBLE_FORMATS, new BarcodeFormat[] {
+                BarcodeFormat.CODE_128,
+                BarcodeFormat.CODE_39,
+                BarcodeFormat.CODE_93,
+                BarcodeFormat.CODABAR,
+                BarcodeFormat.EAN_13,
+                BarcodeFormat.EAN_8,
+                BarcodeFormat.UPC_A,
+                BarcodeFormat.UPC_E,
+                BarcodeFormat.ITF,
+                BarcodeFormat.QR_CODE,
+                BarcodeFormat.DATA_MATRIX,
+                BarcodeFormat.PDF_417,
+                BarcodeFormat.AZTEC,
+                BarcodeFormat.MAXICODE
+            }},
+            { DecodeHintType.TRY_HARDER, true },
+            { DecodeHintType.ALSO_INVERTED, true }
+        };
+
+        var reader = new MultiFormatReader();
+        reader.Hints = hints;
+
+        try
+        {
+            var binaryBitmap = new BinaryBitmap(new HybridBinarizer(luminanceSource));
+            var result = reader.decode(binaryBitmap);
+
+            if (result != null)
+            {
+                Log.Information("[BarcodeDebug] Barcode detected: Format={Format}, Value={Value}, RawBytes={RawBytesLen}",
+                    result.BarcodeFormat, result.Text, result.RawBytes?.Length ?? 0);
+
+                if (IsSeparatorBarcode(result.Text))
+                {
+                    Log.Information("SEPARATOR barcode found: {Value}", result.Text);
+                    return new BarcodeDetectionResult
+                    {
+                        Found = true,
+                        Value = result.Text,
+                        Format = result.BarcodeFormat.ToString(),
+                        IsSeparator = true
+                    };
+                }
+                else
+                {
+                    Log.Warning("[BarcodeDebug] Barcode found but value '{Value}' does not match pattern '{Pattern}'",
+                        result.Text, DefaultBarcodePattern);
+                }
+            }
+        }
+        catch (Exception decodeEx)
+        {
+            Log.Debug("[BarcodeDebug] No barcode in this region: {Message}", decodeEx.Message);
+        }
+
+        return new BarcodeDetectionResult { Found = false };
+    }
+
+    public bool IsSeparatorBarcode(string barcodeValue)
+    {
+        if (string.IsNullOrWhiteSpace(barcodeValue))
+        {
+            return false;
+        }
+
+        return barcodeValue.Trim().Equals(DefaultBarcodePattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public List<List<ScanPage>> GroupPagesIntoFiles(List<ScanPage> pages)
+    {
+        var files = new List<List<ScanPage>>();
+        var currentFile = new List<ScanPage>();
+
+        foreach (var page in pages)
+        {
+            if (page.IsBarcodeSeparator)
+            {
+                if (currentFile.Count > 0)
+                {
+                    files.Add(currentFile);
+                    currentFile = new List<ScanPage>();
+                }
+            }
+            else
+            {
+                currentFile.Add(page);
+            }
+        }
+
+        if (currentFile.Count > 0)
+        {
+            files.Add(currentFile);
+        }
+
+        Log.Information("Split pages into {FileCount} file groups", files.Count);
+        return files;
+    }
+
+    public void ProcessSessionPages(List<ScanPage> pages)
+    {
+        for (int i = 0; i < pages.Count; i++)
+        {
+            var page = pages[i];
+            var result = DetectBarcodeAsync(page.ImagePath).GetAwaiter().GetResult();
+
+            if (result != null && result.Found)
+            {
+                page.IsBarcodeSeparator = result.IsSeparator;
+                page.BarcodeValue = result.Value;
+                Log.Information("Page {Index} marked as separator: {Value}", i, result.Value);
+            }
+            else
+            {
+                page.IsBarcodeSeparator = false;
+            }
+        }
+    }
+}
+
+public class BarcodeDetectionResult
+{
+    public bool Found { get; set; }
+    public string? Value { get; set; }
+    public string? Format { get; set; }
+    public bool IsSeparator { get; set; }
+    public string? Error { get; set; }
+    public string? RegionScanned { get; set; }
+}
