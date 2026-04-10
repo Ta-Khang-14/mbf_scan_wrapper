@@ -56,6 +56,16 @@ internal static class Program
             builder.Services.AddSingleton<PDFService>();
             builder.Services.AddSingleton<FileService>();
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowAll", policy =>
+                {
+                    policy.AllowAnyOrigin()
+                          .AllowAnyMethod()
+                          .AllowAnyHeader();
+                });
+            });
+
             var app = builder.Build();
 
             if (app.Environment.IsDevelopment())
@@ -63,6 +73,8 @@ internal static class Program
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
+
+            app.UseCors("AllowAll");
 
             MapEndpoints(app);
 
