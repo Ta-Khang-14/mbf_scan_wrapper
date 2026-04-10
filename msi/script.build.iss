@@ -1,7 +1,7 @@
 [Setup]
 ; Tên ứng dụng
 AppName=MBF Scan Service
-AppVersion=1.0.0
+AppVersion=1.0.1
 AppPublisher=MBF
 DefaultDirName={userpf}\MBFScanService
 DefaultGroupName=MBF Scan Service
@@ -9,8 +9,11 @@ OutputBaseFilename=MBFScanSetup
 Compression=lzma
 SolidCompression=yes
 
-; Luôn hiển thị trang chọn thư mục cài đặt (Inno Setup không có AllowUserDirectoryInstallation)
+; Luôn hiển thị trang chọn thư mục cài đặt
 DisableDirPage=no
+
+; Cho phép cài lại (ghi đè app đã cài)
+AllowSameVersionUpdates=yes
 
 ; Đáp ứng per-user (không cần admin, không UAC)
 PrivilegesRequired=lowest
