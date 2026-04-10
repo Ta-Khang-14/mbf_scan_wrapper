@@ -12,9 +12,6 @@ SolidCompression=yes
 ; Luôn hiển thị trang chọn thư mục cài đặt
 DisableDirPage=no
 
-; Cho phép cài lại (ghi đè app đã cài)
-AllowSameVersionUpdates=yes
-
 ; Đáp ứng per-user (không cần admin, không UAC)
 PrivilegesRequired=lowest
 
