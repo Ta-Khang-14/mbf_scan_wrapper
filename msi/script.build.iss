@@ -9,6 +9,9 @@ OutputBaseFilename=MBFScanSetup
 Compression=lzma
 SolidCompression=yes
 
+; Luôn hiển thị trang chọn thư mục cài đặt (Inno Setup không có AllowUserDirectoryInstallation)
+DisableDirPage=no
+
 ; Đáp ứng per-user (không cần admin, không UAC)
 PrivilegesRequired=lowest
 
