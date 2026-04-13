@@ -60,46 +60,40 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "scan"]
 						},
-						"description": "Khởi tạo session và quét (blocking - đợi user scan xong). Sau khi nhận response, copy giá trị `sessionId` vào biến {{sessionId}} để dùng cho các API tiếp theo.\n\nLưu ý: MaxPages (mặc định 400) và EnableDuplex (mặc định true) được thiết lập từ server config, client không gửi được."
+						"description": "Khởi tạo session và quét (blocking - đợi user scan xong). Sau khi nhận response, copy giá trị `sessionId` vào biến {{sessionId}} để dùng cho các API tiếp theo."
 					},
 					"response": []
 				},
 				{
-					"name": "3. Get Pages",
+					"name": "3. Detect Files",
 					"request": {
-						"method": "GET",
+						"method": "POST",
 						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
 							{
 								"key": "X-Session-Id",
 								"value": "{{sessionId}}",
 								"description": "Session ID từ response của Scan API"
 							}
 						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"number\": 12345678\n}"
+						},
 						"url": {
 							"raw": "{{baseUrl}}/api/scanner/pages",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "pages"]
 						},
-						"description": "Lấy danh sách pages đã quét. Mỗi page có imageUrl và pdfUrl để xem trước."
+						"description": "Detect barcode, group pages thành files và trả về preview file names.\n\nResponse trả về cấu trúc:\n{\n  \"number\": 12345678,\n  \"totalPages\": 5,\n  \"totalFiles\": 2,\n  \"files\": [\n    {\n      \"fileName\": \"12345678_13042026_105604.pdf\",\n      \"pages\": [\n        { \"pageIndex\": 0, ... },\n        { \"pageIndex\": 1, ... }\n      ]\n    }\n  ]\n}"
 					},
 					"response": []
 				},
 				{
 					"name": "4. Get Page Preview",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test('Status code is 200', function() {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									""
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
 					"request": {
 						"method": "GET",
 						"header": [
@@ -154,7 +148,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "pages", "0"]
 						},
-						"description": "Xóa page tại index 0. Trả về danh sách pages còn lại sau khi xóa.\n\nThay đổi số cuối URL để xóa page khác (0-based index)."
+						"description": "Xóa page tại index 0.\n\nThay đổi số cuối URL để xóa page khác (0-based index)."
 					},
 					"response": []
 				},
@@ -175,14 +169,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"number\": 12345678\n}"
+							"raw": "{\n  \"number\": 12345678,\n  \"files\": [\n    {\n      \"fileName\": \"12345678_13042026_105604.pdf\",\n      \"pageIndices\": [0, 1]\n    },\n    {\n      \"fileName\": \"12345678_13042026_105604_1.pdf\",\n      \"pageIndices\": [2, 3, 4]\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/scanner/process",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "process"]
 						},
-						"description": "Xử lý barcode detection, nhóm pages, tạo PDF và OCR.\n\nFE truyền \"number\" (số hồ sơ) trong body. File sẽ được đặt tên theo rule: {Number}_ddMMyyyy_HHmmss.pdf\n\nTrả về danh sách file với downloadUrl (full URL) - FE có thể dùng trực tiếp để download."
+						"description": "Tạo PDF và OCR theo danh sách file từ client.\n\nBody params:\n- `number`: số hồ sơ\n- `files[]`: danh sách file cần tạo\n- `files[].fileName`: tên file PDF (do client quyết định)\n- `files[].pageIndices`: danh sách page indices để ghép thành file"
 					},
 					"response": []
 				}
@@ -201,7 +195,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "files", "{fileId}"]
 						},
-						"description": "Download file PDF bằng fileId.\n\nThay {fileId} bằng giá trị từ response của Process Scan (trường files[].fileId).\n\nHoặc sử dụng trực tiếp downloadUrl từ Process Scan response."
+						"description": "Download file PDF bằng fileId."
 					},
 					"response": []
 				},
@@ -215,7 +209,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "stored-files"]
 						},
-						"description": "Lấy danh sách tất cả file PDF đã được tạo và lưu trữ.\n\nMỗi file có downloadUrl (full URL) để FE download trực tiếp."
+						"description": "Lấy danh sách tất cả file PDF đã được tạo và lưu trữ."
 					},
 					"response": []
 				},
@@ -229,7 +223,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "files", "{fileId}"]
 						},
-						"description": "Lấy file PDF để hiển thị inline (không force download).\n\nThay {fileId} bằng giá trị từ response của Process Scan hoặc stored-files."
+						"description": "Lấy file PDF để hiển thị inline (không force download)."
 					},
 					"response": []
 				},
@@ -243,7 +237,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "files", "{fileId}"]
 						},
-						"description": "Xóa file PDF đã lưu.\n\nThay {fileId} bằng giá trị từ response của Process Scan hoặc stored-files."
+						"description": "Xóa file PDF đã lưu."
 					},
 					"response": []
 				}
@@ -266,7 +260,7 @@
 			"key": "fileId",
 			"value": "",
 			"type": "string",
-			"description": "File ID - copy từ response của Process Scan hoặc stored-files"
+			"description": "File ID - copy từ response của Process Scan"
 		}
 	]
 }

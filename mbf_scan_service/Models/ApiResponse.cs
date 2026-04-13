@@ -77,7 +77,16 @@ public class ScanStatusResponse
 
 public class PageListResponse
 {
+    public long? Number { get; set; }
     public int TotalPages { get; set; }
+    public int TotalFiles { get; set; }
+    public List<PageInfo> Pages { get; set; } = new();
+    public List<FileInfoResponse> Files { get; set; } = new();
+}
+
+public class FileInfoResponse
+{
+    public string FileName { get; set; } = string.Empty;
     public List<PageInfo> Pages { get; set; } = new();
 }
 
@@ -117,4 +126,21 @@ public class ProcessScanResponse
     public ScanStatus Status { get; set; }
     public int TotalPages { get; set; }
     public List<ScanFileInfo> Files { get; set; } = new();
+}
+
+public class GetPagesRequest
+{
+    public long? Number { get; set; }
+}
+
+public class ProcessRequest
+{
+    public long? Number { get; set; }
+    public List<ProcessFileRequest> Files { get; set; } = new();
+}
+
+public class ProcessFileRequest
+{
+    public string FileName { get; set; } = string.Empty;
+    public List<int> PageIndices { get; set; } = new();
 }

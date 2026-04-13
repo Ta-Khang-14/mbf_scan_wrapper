@@ -2,6 +2,7 @@ using mbf_scan_service.Models;
 using mbf_scan_service.Services;
 using Serilog;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
 
 namespace mbf_scan_service.Controllers;
@@ -139,10 +140,20 @@ public static class ScanController
     public static IResult GetPages(HttpContext context)
     {
         var session = GetSessionFromRequest(context.Request);
+        var request = new GetPagesRequest();
+
+        if (context.Request.ContentLength > 0)
+        {
+            using var reader = new StreamReader(context.Request.Body);
+            var body = reader.ReadToEndAsync().GetAwaiter().GetResult();
+            request = JsonSerializer.Deserialize<GetPagesRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new GetPagesRequest();
+        }
+
+        var pageList = new PageListResponse { Number = request.Number };
+
         if (session == null)
         {
-            return Results.Ok(ApiResponse<PageListResponse>.Ok(
-                new PageListResponse { TotalPages = 0, Pages = new List<PageInfo>() }));
+            return Results.Ok(ApiResponse<PageListResponse>.Ok(pageList));
         }
 
         if (_scannerService != null)
@@ -150,22 +161,50 @@ public static class ScanController
             session.Pages = _scannerService.GetCurrentSession()?.Pages ?? new List<ScanPage>();
         }
 
-        var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-
-        var pages = session.Pages.Select((p, idx) => new PageInfo
+        if (_barcodeService != null)
         {
-            PageIndex = p.PageIndex,
-            ImagePath = p.ImagePath,
-            ImageUrl = $"{baseUrl}/api/scanner/preview/{p.PageIndex}",
-            PdfUrl = $"{baseUrl}/api/scanner/page-pdf/{p.PageIndex}",
-            IsBarcodeSeparator = p.IsBarcodeSeparator,
-            BarcodeValue = p.BarcodeValue,
-            Side = p.Side,
-            ScannedAt = p.ScannedAt
-        }).ToList();
+            _barcodeService.ProcessSessionPages(session.Pages);
+        }
 
-        return Results.Ok(ApiResponse<PageListResponse>.Ok(
-            new PageListResponse { TotalPages = pages.Count, Pages = pages }));
+        var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+        var timestamp = DateTime.Now.ToString("ddMMyyyy_HHmmss");
+        var files = new List<FileInfoResponse>();
+
+        if (_barcodeService != null && session.Pages.Count > 0)
+        {
+            var groupedPages = _barcodeService.GroupPagesIntoFiles(session.Pages);
+            for (int i = 0; i < groupedPages.Count; i++)
+            {
+                var group = groupedPages[i];
+                var fileName = i == 0
+                    ? $"{request.Number?.ToString() ?? ""}_{timestamp}.pdf"
+                    : $"{request.Number?.ToString() ?? ""}_{timestamp}_{i}.pdf";
+
+                var filePages = group.Select(p => new PageInfo
+                {
+                    PageIndex = p.PageIndex,
+                    ImagePath = p.ImagePath,
+                    ImageUrl = $"{baseUrl}/api/scanner/preview/{p.PageIndex}",
+                    PdfUrl = $"{baseUrl}/api/scanner/page-pdf/{p.PageIndex}",
+                    IsBarcodeSeparator = p.IsBarcodeSeparator,
+                    BarcodeValue = p.BarcodeValue,
+                    Side = p.Side,
+                    ScannedAt = p.ScannedAt
+                }).ToList();
+
+                files.Add(new FileInfoResponse
+                {
+                    FileName = fileName,
+                    Pages = filePages
+                });
+            }
+        }
+
+        pageList.TotalPages = session.Pages.Count;
+        pageList.TotalFiles = files.Count;
+        pageList.Files = files;
+
+        return Results.Ok(ApiResponse<PageListResponse>.Ok(pageList));
     }
 
     public static IResult GetPagePreview(int index, HttpContext context)
@@ -299,58 +338,58 @@ public static class ScanController
                 request = JsonSerializer.Deserialize<ProcessRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
 
-            var number = request?.Number ?? 0;
-            var timestamp = DateTime.Now.ToString("ddMMyyyy_HHmmss");
+            if (request == null || request.Files == null || request.Files.Count == 0)
+            {
+                return Results.BadRequest(ApiResponse.Fail("Files list is required", "INVALID_REQUEST"));
+            }
 
             session.Status = ScanStatus.Processing;
+            session.Files.Clear();
 
-            if (_barcodeService != null)
+            foreach (var fileRequest in request.Files)
             {
-                _barcodeService.ProcessSessionPages(session.Pages);
+                if (fileRequest.PageIndices == null || fileRequest.PageIndices.Count == 0)
+                    continue;
 
-                var fileGroups = _barcodeService.GroupPagesIntoFiles(session.Pages);
-                var groupIndex = 0;
+                if (string.IsNullOrWhiteSpace(fileRequest.FileName))
+                    continue;
 
-                foreach (var group in fileGroups)
+                var filePages = fileRequest.PageIndices
+                    .Where(idx => idx >= 0 && idx < session.Pages.Count)
+                    .Select(idx => session.Pages[idx])
+                    .ToList();
+
+                if (filePages.Count == 0)
+                    continue;
+
+                var fileId = Guid.NewGuid().ToString("N")[..8];
+                var pdfPath = _pdfService?.CreatePdfFromPages(filePages, fileId);
+
+                if (!string.IsNullOrEmpty(pdfPath) && _fileService != null)
                 {
-                    if (group.Count == 0) continue;
+                    var metadata = _fileService.SavePdf(pdfPath, fileRequest.FileName);
 
-                    var fileId = Guid.NewGuid().ToString("N")[..8];
-                    var pdfPath = _pdfService?.CreatePdfFromPages(group, fileId);
-
-                    if (!string.IsNullOrEmpty(pdfPath) && _fileService != null)
+                    if (metadata.IsSuccess)
                     {
-                        var fileName = groupIndex == 0
-                            ? $"{number}_{timestamp}.pdf"
-                            : $"{number}_{timestamp}_{groupIndex}.pdf";
-
-                        var metadata = _fileService.SavePdf(pdfPath, fileName);
-
-                        if (metadata.IsSuccess)
+                        string? ocrText = null;
+                        if (_ocrService != null)
                         {
-                            string? ocrText = null;
-                            if (_ocrService != null)
-                            {
-                                var firstPage = group.First();
-                                ocrText = _ocrService.PerformOCR(firstPage.ImagePath);
-                            }
-
-                            var scanFile = new ScanFile(group)
-                            {
-                                FileId = metadata.Id ?? fileId,
-                                FileName = metadata.FileName ?? fileName,
-                                PDFPath = pdfPath,
-                                DownloadUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/files/{metadata.Id ?? fileId}",
-                                OCRResult = ocrText,
-                                FileSize = metadata.FileSize,
-                                CreatedAt = DateTime.Now
-                            };
-
-                            session.Files.Add(scanFile);
+                            ocrText = _ocrService.PerformOCR(filePages.First().ImagePath);
                         }
-                    }
 
-                    groupIndex++;
+                        var scanFile = new ScanFile(filePages)
+                        {
+                            FileId = metadata.Id ?? fileId,
+                            FileName = metadata.FileName ?? fileRequest.FileName,
+                            PDFPath = pdfPath,
+                            DownloadUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/files/{metadata.Id ?? fileId}",
+                            OCRResult = ocrText,
+                            FileSize = metadata.FileSize,
+                            CreatedAt = DateTime.Now
+                        };
+
+                        session.Files.Add(scanFile);
+                    }
                 }
             }
 
@@ -360,7 +399,7 @@ public static class ScanController
             var response = new ProcessScanResponse
             {
                 SessionId = session.SessionId,
-                Number = number,
+                Number = request.Number ?? 0,
                 Status = session.Status,
                 TotalPages = session.TotalPages,
                 Files = session.Files.Select(f => new ScanFileInfo
@@ -461,11 +500,6 @@ public static class ScanController
         _fileService.DeleteFile(id);
         return Results.Ok(ApiResponse.Ok($"File {id} deleted"));
     }
-}
-
-public class ProcessRequest
-{
-    public long Number { get; set; }
 }
 
 public class ScanRequest

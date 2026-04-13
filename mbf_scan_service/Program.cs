@@ -134,7 +134,7 @@ internal static class Program
             .WithName("Scan")
             .WithTags("Scanner");
 
-        apiGroup.MapGet("/scanner/pages", ScanController.GetPages)
+        apiGroup.MapPost("/scanner/pages", ScanController.GetPages)
             .WithName("GetPages")
             .WithTags("Scanner");
 
