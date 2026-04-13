@@ -183,7 +183,6 @@ public static class ScanController
                 var filePages = group.Select(p => new PageInfo
                 {
                     PageIndex = p.PageIndex,
-                    ImagePath = p.ImagePath,
                     ImageUrl = $"{baseUrl}/api/scanner/preview/{p.PageIndex}",
                     PdfUrl = $"{baseUrl}/api/scanner/page-pdf/{p.PageIndex}",
                     IsBarcodeSeparator = p.IsBarcodeSeparator,
