@@ -116,7 +116,7 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
 
 **Header:** `X-Session-Id: <sessionId>`
 
-**Response:** Hình ảnh (JPEG/PNG/TIFF)
+**Response:** Hình ảnh JPEG (200px max width, 50% quality, cache 5 phút)
 
 #### 3.3 Xem PDF của 1 Page
 **API:** `GET /api/scanner/page-pdf/{index}`
@@ -262,6 +262,31 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
 ```
 
 **Lưu ý:** `MaxPages` và `EnableDuplex` chỉ thiết lập được từ server, client không gửi lên được.
+
+---
+
+## Image Preview Service
+
+Service xử lý preview ảnh scan để tối ưu hiển thị trên web.
+
+| Tham số | Giá trị | Mô tả |
+|---------|---------|-------|
+| `MaxWidth` | 200px | Chiều rộng tối đa của ảnh preview |
+| `Quality` | 50% | Chất lượng nén JPEG |
+| `CacheDuration` | 5 phút | Thời gian cache ảnh preview |
+
+**Tính năng:**
+- Tự động resize ảnh TIF gốc về kích thước nhỏ hơn
+- Chuyển đổi sang JPEG để trình duyệt dễ dàng hiển thị
+- Cache ảnh preview để giảm tải xử lý khi gọi API nhiều lần
+- Cache tự động cleanup sau 5 phút
+- Cache bị invalidate khi xóa page
+
+**Cấu hình trong code (Program.cs):**
+```csharp
+builder.Services.AddSingleton<ImageService>(sp =>
+    new ImageService(maxWidth: 200, quality: 50, cacheDurationMinutes: 5));
+```
 
 ---
 

@@ -55,6 +55,8 @@ internal static class Program
             builder.Services.AddSingleton<OCRService>();
             builder.Services.AddSingleton<PDFService>();
             builder.Services.AddSingleton<FileService>();
+            builder.Services.AddSingleton<ImageService>(sp =>
+                new ImageService(maxWidth: 200, quality: 50, cacheDurationMinutes: 5));
 
             builder.Services.AddCors(options =>
             {
@@ -83,7 +85,8 @@ internal static class Program
                 app.Services.GetRequiredService<BarcodeService>(),
                 app.Services.GetRequiredService<OCRService>(),
                 app.Services.GetRequiredService<PDFService>(),
-                app.Services.GetRequiredService<FileService>()
+                app.Services.GetRequiredService<FileService>(),
+                app.Services.GetRequiredService<ImageService>()
             );
 
             ApplicationConfiguration.Initialize();

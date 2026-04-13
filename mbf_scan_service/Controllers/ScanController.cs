@@ -17,19 +17,22 @@ public static class ScanController
     private static OCRService? _ocrService;
     private static PDFService? _pdfService;
     private static FileService? _fileService;
+    private static ImageService? _imageService;
 
     public static void Initialize(
         ScannerService scannerService,
         BarcodeService barcodeService,
         OCRService ocrService,
         PDFService pdfService,
-        FileService fileService)
+        FileService fileService,
+        ImageService imageService)
     {
         _scannerService = scannerService;
         _barcodeService = barcodeService;
         _ocrService = ocrService;
         _pdfService = pdfService;
         _fileService = fileService;
+        _imageService = imageService;
         Log.Information("ScanController initialized with services");
     }
 
@@ -121,7 +124,8 @@ public static class ScanController
                     TotalPages = _currentSession.TotalPages,
                     TotalFiles = _currentSession.TotalFiles,
                     ScannerName = _currentSession.ScannerName,
-                    ElapsedTime = _currentSession.ElapsedTime
+                    ElapsedTime = _currentSession.ElapsedTime,
+                    ErrorMessage = _currentSession.ErrorMessage
                 },
                 "Scan completed"));
         }
@@ -183,17 +187,13 @@ public static class ScanController
             return Results.NotFound(ApiResponse.Fail("Image file not found", "FILE_NOT_FOUND"));
         }
 
-        var extension = Path.GetExtension(page.ImagePath).ToLowerInvariant();
-        var contentType = extension switch
+        var previewPath = _imageService?.GetPreviewPath(page.ImagePath);
+        if (string.IsNullOrEmpty(previewPath) || !File.Exists(previewPath))
         {
-            ".jpg" or ".jpeg" => "image/jpeg",
-            ".png" => "image/png",
-            ".tif" or ".tiff" => "image/tiff",
-            ".bmp" => "image/bmp",
-            _ => "application/octet-stream"
-        };
+            return Results.NotFound(ApiResponse.Fail("Failed to create preview", "PREVIEW_FAILED"));
+        }
 
-        return Results.File(page.ImagePath, contentType);
+        return Results.File(previewPath, "image/jpeg");
     }
 
     public static IResult GetPagePdf(int index, HttpContext context)
@@ -247,6 +247,11 @@ public static class ScanController
         }
 
         session.Pages.RemoveAt(index);
+
+        if (!string.IsNullOrEmpty(session.Pages[index > 0 ? index - 1 : 0].ImagePath))
+        {
+            _imageService?.InvalidateCache(session.Pages[index > 0 ? index - 1 : 0].ImagePath);
+        }
 
         for (int i = 0; i < session.Pages.Count; i++)
         {
