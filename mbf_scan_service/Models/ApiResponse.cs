@@ -97,6 +97,7 @@ public class PageInfo
     public string? ImageUrl { get; set; }
     public string? PdfUrl { get; set; }
     public bool IsBarcodeSeparator { get; set; }
+    public bool IsDocSeparator { get; set; }
     public string? BarcodeValue { get; set; }
     public ScanSide Side { get; set; }
     public DateTime ScannedAt { get; set; }
@@ -125,7 +126,26 @@ public class ProcessScanResponse
     public long Number { get; set; }
     public ScanStatus Status { get; set; }
     public int TotalPages { get; set; }
-    public List<ScanFileInfo> Files { get; set; } = new();
+    public List<ProcessDocumentResponse> Documents { get; set; } = new();
+}
+
+public class ProcessDocumentResponse
+{
+    public int DocIndex { get; set; }
+    public List<ProcessFileResponse> Files { get; set; } = new();
+}
+
+public class ProcessFileResponse
+{
+    public int DocIndex { get; set; }
+    public int FileIndex { get; set; }
+    public string FileId { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string DownloadUrl { get; set; } = string.Empty;
+    public int TotalPages { get; set; }
+    public long FileSize { get; set; }
+    public string? OCRResult { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 public class GetPagesRequest
@@ -133,14 +153,50 @@ public class GetPagesRequest
     public long? Number { get; set; }
 }
 
+public class GetPagesResponse
+{
+    public int TotalPages { get; set; }
+    public int TotalDocuments { get; set; }
+    public int TotalFiles { get; set; }
+    public List<DocumentGroupResponse> Documents { get; set; } = new();
+}
+
+public class DocumentGroupResponse
+{
+    public int DocIndex { get; set; }
+    public List<FileGroupResponse> Files { get; set; } = new();
+}
+
+public class FileGroupResponse
+{
+    public int FileIndex { get; set; }
+    public int PageCount { get; set; }
+    public List<PageInfo> Pages { get; set; } = new();
+}
+
 public class ProcessRequest
 {
     public long? Number { get; set; }
+    public List<ProcessDocumentRequest> Documents { get; set; } = new();
+    public List<ProcessFileRequest> Files { get; set; } = new();
+}
+
+public class ProcessDocumentRequest
+{
+    public int DocIndex { get; set; }
     public List<ProcessFileRequest> Files { get; set; } = new();
 }
 
 public class ProcessFileRequest
 {
+    public int DocIndex { get; set; }
+    public int FileIndex { get; set; }
     public string FileName { get; set; } = string.Empty;
-    public List<int> PageIndices { get; set; } = new();
+    public List<PageSelection> Pages { get; set; } = new();
+}
+
+public class PageSelection
+{
+    public int Index { get; set; }
+    public bool IsOCR { get; set; } = false;
 }

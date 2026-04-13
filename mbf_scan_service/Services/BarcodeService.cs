@@ -10,11 +10,12 @@ using static ZXing.RGBLuminanceSource;
 
 public class BarcodeService
 {
-    private const string DefaultBarcodePattern = "Barcode Sperate Page";
+    private const string DefaultFileBarcodePattern = "File_Separate";
+    private const string DefaultDocBarcodePattern = "Doc_Separate";
 
     public BarcodeService()
     {
-        Log.Information("BarcodeService initialized with pattern: {Pattern}", DefaultBarcodePattern);
+        Log.Information("BarcodeService initialized with pattern: {Pattern}", DefaultFileBarcodePattern);
     }
 
     public BarcodeDetectionResult? DetectBarcode(string imagePath)
@@ -153,19 +154,21 @@ public class BarcodeService
 
                 if (IsSeparatorBarcode(result.Text))
                 {
-                    Log.Information("SEPARATOR barcode found: {Value}", result.Text);
+                    var separatorType = GetSeparatorType(result.Text);
+                    Log.Information("SEPARATOR barcode found: {Value}, Type: {Type}", result.Text, separatorType);
                     return new BarcodeDetectionResult
                     {
                         Found = true,
                         Value = result.Text,
                         Format = result.BarcodeFormat.ToString(),
-                        IsSeparator = true
+                        IsSeparator = true,
+                        IsDocSeparator = separatorType == SeparatorBarcodeType.DocSeparator
                     };
                 }
                 else
                 {
                     Log.Warning("[BarcodeDebug] Barcode found but value '{Value}' does not match pattern '{Pattern}'",
-                        result.Text, DefaultBarcodePattern);
+                        result.Text, DefaultFileBarcodePattern);
                 }
             }
         }
@@ -184,7 +187,28 @@ public class BarcodeService
             return false;
         }
 
-        return barcodeValue.Trim().Equals(DefaultBarcodePattern, StringComparison.OrdinalIgnoreCase);
+        var trimmed = barcodeValue.Trim();
+        return trimmed.Equals(DefaultFileBarcodePattern, StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals(DefaultDocBarcodePattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public SeparatorBarcodeType GetSeparatorType(string barcodeValue)
+    {
+        if (string.IsNullOrWhiteSpace(barcodeValue))
+        {
+            return SeparatorBarcodeType.None;
+        }
+
+        var trimmed = barcodeValue.Trim();
+        if (trimmed.Equals(DefaultDocBarcodePattern, StringComparison.OrdinalIgnoreCase))
+        {
+            return SeparatorBarcodeType.DocSeparator;
+        }
+        if (trimmed.Equals(DefaultFileBarcodePattern, StringComparison.OrdinalIgnoreCase))
+        {
+            return SeparatorBarcodeType.FileSeparator;
+        }
+        return SeparatorBarcodeType.None;
     }
 
     public List<List<ScanPage>> GroupPagesIntoFiles(List<ScanPage> pages)
@@ -194,7 +218,7 @@ public class BarcodeService
 
         foreach (var page in pages)
         {
-            if (page.IsBarcodeSeparator)
+            if (page.IsBarcodeSeparator || page.IsDocSeparator)
             {
                 if (currentFile.Count > 0)
                 {
@@ -217,6 +241,81 @@ public class BarcodeService
         return files;
     }
 
+    public List<DocumentGroupResponse> GroupPagesIntoDocuments(List<ScanPage> pages, string? baseUrl = null)
+    {
+        var documents = new List<DocumentGroupResponse>();
+        var currentDoc = new DocumentGroupResponse { DocIndex = 0 };
+        var currentFile = new FileGroupResponse { FileIndex = 0 };
+
+        foreach (var page in pages)
+        {
+            if (page.IsDocSeparator)
+            {
+                if (currentFile.Pages.Count > 0)
+                {
+                    currentFile.PageCount = currentFile.Pages.Count;
+                    currentDoc.Files.Add(currentFile);
+                }
+                if (currentDoc.Files.Count > 0)
+                {
+                    documents.Add(currentDoc);
+                }
+
+                currentDoc = new DocumentGroupResponse { DocIndex = documents.Count };
+                currentFile = new FileGroupResponse { FileIndex = 0 };
+            }
+            else if (page.IsBarcodeSeparator)
+            {
+                if (currentFile.Pages.Count > 0)
+                {
+                    currentFile.PageCount = currentFile.Pages.Count;
+                    currentDoc.Files.Add(currentFile);
+                }
+                currentFile = new FileGroupResponse { FileIndex = currentDoc.Files.Count };
+            }
+            else
+            {
+                var pageInfo = new PageInfo
+                {
+                    PageIndex = page.PageIndex,
+                    ImagePath = page.ImagePath,
+                    IsBarcodeSeparator = page.IsBarcodeSeparator,
+                    IsDocSeparator = page.IsDocSeparator,
+                    BarcodeValue = page.BarcodeValue,
+                    Side = page.Side,
+                    ScannedAt = page.ScannedAt
+                };
+
+                if (!string.IsNullOrEmpty(baseUrl))
+                {
+                    pageInfo.ImageUrl = $"{baseUrl}/api/scanner/preview/{page.PageIndex}";
+                    pageInfo.PdfUrl = $"{baseUrl}/api/scanner/page-pdf/{page.PageIndex}";
+                }
+
+                currentFile.Pages.Add(pageInfo);
+            }
+        }
+
+        if (currentFile.Pages.Count > 0)
+        {
+            currentFile.PageCount = currentFile.Pages.Count;
+            currentDoc.Files.Add(currentFile);
+        }
+        if (currentDoc.Files.Count > 0)
+        {
+            documents.Add(currentDoc);
+        }
+
+        if (documents.Count == 0 && pages.Count > 0)
+        {
+            documents.Add(currentDoc);
+        }
+
+        Log.Information("Grouped pages into {DocCount} documents with {FileCount} total files",
+            documents.Count, documents.Sum(d => d.Files.Count));
+        return documents;
+    }
+
     public void ProcessSessionPages(List<ScanPage> pages)
     {
         for (int i = 0; i < pages.Count; i++)
@@ -226,13 +325,17 @@ public class BarcodeService
 
             if (result != null && result.Found)
             {
-                page.IsBarcodeSeparator = result.IsSeparator;
+                var separatorType = GetSeparatorType(result.Value!);
+                page.IsDocSeparator = separatorType == SeparatorBarcodeType.DocSeparator;
+                page.IsBarcodeSeparator = separatorType == SeparatorBarcodeType.FileSeparator;
                 page.BarcodeValue = result.Value;
-                Log.Information("Page {Index} marked as separator: {Value}", i, result.Value);
+                Log.Information("Page {Index} marked: IsDocSeparator={IsDoc}, IsFileSeparator={IsFile}, Barcode={Value}",
+                    i, page.IsDocSeparator, page.IsBarcodeSeparator, result.Value);
             }
             else
             {
                 page.IsBarcodeSeparator = false;
+                page.IsDocSeparator = false;
             }
         }
     }
@@ -244,6 +347,14 @@ public class BarcodeDetectionResult
     public string? Value { get; set; }
     public string? Format { get; set; }
     public bool IsSeparator { get; set; }
+    public bool IsDocSeparator { get; set; }
     public string? Error { get; set; }
     public string? RegionScanned { get; set; }
+}
+
+public enum SeparatorBarcodeType
+{
+    None,
+    FileSeparator,
+    DocSeparator
 }

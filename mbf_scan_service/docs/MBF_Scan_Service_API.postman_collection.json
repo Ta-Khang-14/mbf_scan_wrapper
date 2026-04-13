@@ -67,28 +67,20 @@
 				{
 					"name": "3. Detect Files",
 					"request": {
-						"method": "POST",
+						"method": "GET",
 						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
 							{
 								"key": "X-Session-Id",
 								"value": "{{sessionId}}",
 								"description": "Session ID từ response của Scan API"
 							}
 						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"number\": 12345678\n}"
-						},
 						"url": {
 							"raw": "{{baseUrl}}/api/scanner/pages",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "pages"]
 						},
-						"description": "Detect barcode, group pages thành files và trả về preview file names.\n\nResponse trả về cấu trúc:\n{\n  \"number\": 12345678,\n  \"totalPages\": 5,\n  \"totalFiles\": 2,\n  \"files\": [\n    {\n      \"fileName\": \"12345678_13042026_105604.pdf\",\n      \"pages\": [\n        { \"pageIndex\": 0, ... },\n        { \"pageIndex\": 1, ... }\n      ]\n    }\n  ]\n}"
+						"description": "Detect barcode, group pages thành documents và files.\n\nResponse trả về cấu trúc:\n{\n  \"totalPages\": 8,\n  \"totalDocuments\": 2,\n  \"totalFiles\": 3,\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        {\n          \"fileIndex\": 0,\n          \"pageCount\": 2,\n          \"pages\": [\n            { \"pageIndex\": 0, \"imageUrl\": \"...\", \"isDocSeparator\": false, ... },\n            { \"pageIndex\": 1, \"imageUrl\": \"...\", \"isDocSeparator\": false, ... }\n          ]\n        }\n      ]\n    }\n  ]\n}\n\nBarcode Separator:\n- Doc_Separate: Tách thành document mới\n- File_Separate: Tách thành file mới trong cùng document"
 					},
 					"response": []
 				},
@@ -169,14 +161,14 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"number\": 12345678,\n  \"files\": [\n    {\n      \"fileName\": \"12345678_13042026_105604.pdf\",\n      \"pageIndices\": [0, 1]\n    },\n    {\n      \"fileName\": \"12345678_13042026_105604_1.pdf\",\n      \"pageIndices\": [2, 3, 4]\n    }\n  ]\n}"
+							"raw": "{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 0,\n          \"fileName\": \"doc1_file1.pdf\",\n          \"pages\": [\n            { \"index\": 0, \"isOCR\": true },\n            { \"index\": 1, \"isOCR\": true }\n          ]\n        },\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 1,\n          \"fileName\": \"doc1_file2.pdf\",\n          \"pages\": [\n            { \"index\": 2, \"isOCR\": false },\n            { \"index\": 3, \"isOCR\": false }\n          ]\n        }\n      ]\n    },\n    {\n      \"docIndex\": 1,\n      \"files\": [\n        {\n          \"docIndex\": 1,\n          \"fileIndex\": 2,\n          \"fileName\": \"doc2_file1.pdf\",\n          \"pages\": [\n            { \"index\": 4, \"isOCR\": true },\n            { \"index\": 5, \"isOCR\": true },\n            { \"index\": 6, \"isOCR\": false }\n          ]\n        }\n      ]\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/scanner/process",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "process"]
 						},
-						"description": "Tạo PDF và OCR theo danh sách file từ client.\n\nBody params:\n- `number`: số hồ sơ\n- `files[]`: danh sách file cần tạo\n- `files[].fileName`: tên file PDF (do client quyết định)\n- `files[].pageIndices`: danh sách page indices để ghép thành file"
+						"description": "Tạo PDF và OCR theo danh sách documents/files từ client.\n\nBody params (cấu trúc Documents - khuyến nghị):\n- `documents[]`: danh sách documents\n- `documents[].files[]`: danh sách files trong document\n- `documents[].files[].fileName`: tên file PDF (do client quyết định)\n- `documents[].files[].pageIndices`: danh sách page indices để ghép thành file\n\nHoặc dùng cấu trúc legacy (files):\n- `files[]`: danh sách files thẳng (không có documents)\n\nResponse trả về kết quả nhóm theo documents:\n{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        { \"fileIndex\": 0, \"fileId\": \"...\", \"fileName\": \"...\", \"downloadUrl\": \"...\", ... }\n      ]\n    }\n  ]\n}"
 					},
 					"response": []
 				}

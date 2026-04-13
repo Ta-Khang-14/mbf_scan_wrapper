@@ -140,20 +140,10 @@ public static class ScanController
     public static IResult GetPages(HttpContext context)
     {
         var session = GetSessionFromRequest(context.Request);
-        var request = new GetPagesRequest();
-
-        if (context.Request.ContentLength > 0)
-        {
-            using var reader = new StreamReader(context.Request.Body);
-            var body = reader.ReadToEndAsync().GetAwaiter().GetResult();
-            request = JsonSerializer.Deserialize<GetPagesRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new GetPagesRequest();
-        }
-
-        var pageList = new PageListResponse { Number = request.Number };
 
         if (session == null)
         {
-            return Results.Ok(ApiResponse<PageListResponse>.Ok(pageList));
+            return Results.Ok(ApiResponse<GetPagesResponse>.Ok(new GetPagesResponse()));
         }
 
         if (_scannerService != null)
@@ -161,49 +151,27 @@ public static class ScanController
             session.Pages = _scannerService.GetCurrentSession()?.Pages ?? new List<ScanPage>();
         }
 
-        if (_barcodeService != null)
+        if (_barcodeService != null && session.Pages.Count > 0)
         {
             _barcodeService.ProcessSessionPages(session.Pages);
         }
 
         var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-        var timestamp = DateTime.Now.ToString("ddMMyyyy_HHmmss");
-        var files = new List<FileInfoResponse>();
 
-        if (_barcodeService != null && session.Pages.Count > 0)
+        var documents = _barcodeService?.GroupPagesIntoDocuments(session.Pages, baseUrl)
+            ?? new List<DocumentGroupResponse>();
+
+        var totalFiles = documents.Sum(d => d.Files.Count);
+
+        var response = new GetPagesResponse
         {
-            var groupedPages = _barcodeService.GroupPagesIntoFiles(session.Pages);
-            for (int i = 0; i < groupedPages.Count; i++)
-            {
-                var group = groupedPages[i];
-                var fileName = i == 0
-                    ? $"{request.Number?.ToString() ?? ""}_{timestamp}.pdf"
-                    : $"{request.Number?.ToString() ?? ""}_{timestamp}_{i}.pdf";
+            TotalPages = session.Pages.Count,
+            TotalDocuments = documents.Count,
+            TotalFiles = totalFiles,
+            Documents = documents
+        };
 
-                var filePages = group.Select(p => new PageInfo
-                {
-                    PageIndex = p.PageIndex,
-                    ImageUrl = $"{baseUrl}/api/scanner/preview/{p.PageIndex}",
-                    PdfUrl = $"{baseUrl}/api/scanner/page-pdf/{p.PageIndex}",
-                    IsBarcodeSeparator = p.IsBarcodeSeparator,
-                    BarcodeValue = p.BarcodeValue,
-                    Side = p.Side,
-                    ScannedAt = p.ScannedAt
-                }).ToList();
-
-                files.Add(new FileInfoResponse
-                {
-                    FileName = fileName,
-                    Pages = filePages
-                });
-            }
-        }
-
-        pageList.TotalPages = session.Pages.Count;
-        pageList.TotalFiles = files.Count;
-        pageList.Files = files;
-
-        return Results.Ok(ApiResponse<PageListResponse>.Ok(pageList));
+        return Results.Ok(ApiResponse<GetPagesResponse>.Ok(response));
     }
 
     public static IResult GetPagePreview(int index, HttpContext context)
@@ -337,58 +305,107 @@ public static class ScanController
                 request = JsonSerializer.Deserialize<ProcessRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
 
-            if (request == null || request.Files == null || request.Files.Count == 0)
+            if (request == null)
             {
-                return Results.BadRequest(ApiResponse.Fail("Files list is required", "INVALID_REQUEST"));
+                return Results.BadRequest(ApiResponse.Fail("Request body is required", "INVALID_REQUEST"));
+            }
+
+            var hasDocuments = request.Documents != null && request.Documents.Count > 0;
+            var hasFiles = request.Files != null && request.Files.Count > 0;
+
+            if (!hasDocuments && !hasFiles)
+            {
+                return Results.BadRequest(ApiResponse.Fail("Documents or Files list is required", "INVALID_REQUEST"));
             }
 
             session.Status = ScanStatus.Processing;
             session.Files.Clear();
 
-            foreach (var fileRequest in request.Files)
+            var documentResponses = new List<ProcessDocumentResponse>();
+
+            if (request.Documents != null && request.Documents.Count > 0)
             {
-                if (fileRequest.PageIndices == null || fileRequest.PageIndices.Count == 0)
-                    continue;
-
-                if (string.IsNullOrWhiteSpace(fileRequest.FileName))
-                    continue;
-
-                var filePages = fileRequest.PageIndices
-                    .Where(idx => idx >= 0 && idx < session.Pages.Count)
-                    .Select(idx => session.Pages[idx])
-                    .ToList();
-
-                if (filePages.Count == 0)
-                    continue;
-
-                var fileId = Guid.NewGuid().ToString("N")[..8];
-                var pdfPath = _pdfService?.CreatePdfFromPages(filePages, fileId);
-
-                if (!string.IsNullOrEmpty(pdfPath) && _fileService != null)
+                foreach (var docRequest in request.Documents)
                 {
-                    var metadata = _fileService.SavePdf(pdfPath, fileRequest.FileName);
+                    var docResponse = new ProcessDocumentResponse { DocIndex = docRequest.DocIndex };
 
-                    if (metadata.IsSuccess)
+                    if (docRequest.Files == null) continue;
+
+                    foreach (var fileRequest in docRequest.Files)
                     {
-                        string? ocrText = null;
-                        if (_ocrService != null)
+                        if (fileRequest.Pages == null || fileRequest.Pages.Count == 0)
+                            continue;
+
+                        if (string.IsNullOrWhiteSpace(fileRequest.FileName))
+                            continue;
+
+                        var filePages = fileRequest.Pages
+                            .Where(p => p.Index >= 0 && p.Index < session.Pages.Count)
+                            .Select(p => session.Pages[p.Index])
+                            .ToList();
+
+                        var ocrPages = fileRequest.Pages
+                            .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
+                            .Select(p => session.Pages[p.Index])
+                            .ToList();
+
+                        if (filePages.Count == 0)
+                            continue;
+
+                        var fileResult = CreateScanFile(
+                            session, filePages, ocrPages, fileRequest.FileName,
+                            context.Request.Scheme, context.Request.Host,
+                            fileRequest.DocIndex, fileRequest.FileIndex);
+                        if (fileResult != null)
                         {
-                            ocrText = _ocrService.PerformOCR(filePages.First().ImagePath);
+                            docResponse.Files.Add(fileResult);
                         }
-
-                        var scanFile = new ScanFile(filePages)
-                        {
-                            FileId = metadata.Id ?? fileId,
-                            FileName = metadata.FileName ?? fileRequest.FileName,
-                            PDFPath = pdfPath,
-                            DownloadUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/files/{metadata.Id ?? fileId}",
-                            OCRResult = ocrText,
-                            FileSize = metadata.FileSize,
-                            CreatedAt = DateTime.Now
-                        };
-
-                        session.Files.Add(scanFile);
                     }
+
+                    if (docResponse.Files.Count > 0)
+                    {
+                        documentResponses.Add(docResponse);
+                    }
+                }
+            }
+            else if (request.Files != null && request.Files.Count > 0)
+            {
+                var docResponse = new ProcessDocumentResponse { DocIndex = 0 };
+
+                foreach (var fileRequest in request.Files)
+                {
+                    if (fileRequest.Pages == null || fileRequest.Pages.Count == 0)
+                        continue;
+
+                    if (string.IsNullOrWhiteSpace(fileRequest.FileName))
+                        continue;
+
+                    var filePages = fileRequest.Pages
+                        .Where(p => p.Index >= 0 && p.Index < session.Pages.Count)
+                        .Select(p => session.Pages[p.Index])
+                        .ToList();
+
+                    var ocrPages = fileRequest.Pages
+                        .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
+                        .Select(p => session.Pages[p.Index])
+                        .ToList();
+
+                    if (filePages.Count == 0)
+                        continue;
+
+                    var fileResult = CreateScanFile(
+                        session, filePages, ocrPages, fileRequest.FileName,
+                        context.Request.Scheme, context.Request.Host,
+                        fileRequest.DocIndex, fileRequest.FileIndex);
+                    if (fileResult != null)
+                    {
+                        docResponse.Files.Add(fileResult);
+                    }
+                }
+
+                if (docResponse.Files.Count > 0)
+                {
+                    documentResponses.Add(docResponse);
                 }
             }
 
@@ -401,16 +418,7 @@ public static class ScanController
                 Number = request.Number ?? 0,
                 Status = session.Status,
                 TotalPages = session.TotalPages,
-                Files = session.Files.Select(f => new ScanFileInfo
-                {
-                    FileId = f.FileId,
-                    FileName = f.FileName,
-                    DownloadUrl = $"{context.Request.Scheme}://{context.Request.Host}/api/files/{f.FileId}",
-                    TotalPages = f.Pages.Count,
-                    FileSize = f.FileSize,
-                    OCRResult = f.OCRResult,
-                    CreatedAt = f.CreatedAt
-                }).ToList()
+                Documents = documentResponses
             };
 
             return Results.Ok(ApiResponse<ProcessScanResponse>.Ok(response, "Processing completed"));
@@ -498,6 +506,61 @@ public static class ScanController
 
         _fileService.DeleteFile(id);
         return Results.Ok(ApiResponse.Ok($"File {id} deleted"));
+    }
+
+    private static ProcessFileResponse? CreateScanFile(
+        ScanSession session,
+        List<ScanPage> filePages,
+        List<ScanPage> ocrPages,
+        string fileName,
+        string scheme,
+        HostString host,
+        int docIndex,
+        int fileIndex)
+    {
+        var fileId = Guid.NewGuid().ToString("N")[..8];
+        var pdfPath = _pdfService?.CreatePdfFromPages(filePages, fileId);
+
+        if (!string.IsNullOrEmpty(pdfPath) && _fileService != null)
+        {
+            var metadata = _fileService.SavePdf(pdfPath, fileName);
+
+            if (metadata.IsSuccess)
+            {
+                string? ocrText = null;
+                if (_ocrService != null && ocrPages.Count > 0)
+                {
+                    ocrText = _ocrService.PerformOCR(ocrPages.First().ImagePath);
+                }
+
+                var scanFile = new ScanFile(filePages)
+                {
+                    FileId = metadata.Id ?? fileId,
+                    FileName = metadata.FileName ?? fileName,
+                    PDFPath = pdfPath,
+                    DownloadUrl = $"{scheme}://{host}/api/files/{metadata.Id ?? fileId}",
+                    OCRResult = ocrText,
+                    FileSize = metadata.FileSize,
+                    CreatedAt = DateTime.Now
+                };
+
+                session.Files.Add(scanFile);
+
+                return new ProcessFileResponse
+                {
+                    DocIndex = docIndex,
+                    FileIndex = fileIndex,
+                    FileId = scanFile.FileId,
+                    FileName = scanFile.FileName,
+                    DownloadUrl = scanFile.DownloadUrl,
+                    TotalPages = scanFile.Pages.Count,
+                    FileSize = scanFile.FileSize,
+                    OCRResult = scanFile.OCRResult,
+                    CreatedAt = scanFile.CreatedAt
+                };
+            }
+        }
+        return null;
     }
 }
 

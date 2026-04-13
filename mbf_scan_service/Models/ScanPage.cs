@@ -20,6 +20,7 @@ public class ScanPage
     public int PageIndex { get; set; }
     public string ImagePath { get; set; } = string.Empty;
     public bool IsBarcodeSeparator { get; set; }
+    public bool IsDocSeparator { get; set; }
     public ScanSide Side { get; set; }
     public DateTime ScannedAt { get; set; }
     public string? BarcodeValue { get; set; }
