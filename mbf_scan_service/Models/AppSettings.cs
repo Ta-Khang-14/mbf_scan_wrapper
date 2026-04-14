@@ -10,9 +10,17 @@ public class ScannerConfig
     public int ScanTimeoutSeconds { get; set; } = 120;
 }
 
+public class CleanupConfig
+{
+    public int TempRetentionDays { get; set; } = 1;
+    public int OutputRetentionDays { get; set; } = 30;
+    public int CleanupIntervalHours { get; set; } = 1;
+}
+
 public class AppSettings
 {
     public ScannerConfig Scanner { get; set; } = new();
+    public CleanupConfig Cleanup { get; set; } = new();
     public string TempFolder { get; set; } = "temp";
     public string OutputFolder { get; set; } = "output";
 }

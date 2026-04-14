@@ -12,3 +12,4 @@
 *.log
 appsettings.Development.json
 appsettings.local.json
+.cursor/

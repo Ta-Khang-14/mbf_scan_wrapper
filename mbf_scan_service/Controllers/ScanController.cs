@@ -19,6 +19,7 @@ public static class ScanController
     private static PDFService? _pdfService;
     private static FileService? _fileService;
     private static ImageService? _imageService;
+    private static CleanupService? _cleanupService;
 
     public static void Initialize(
         ScannerService scannerService,
@@ -26,7 +27,8 @@ public static class ScanController
         OCRService ocrService,
         PDFService pdfService,
         FileService fileService,
-        ImageService imageService)
+        ImageService imageService,
+        CleanupService cleanupService)
     {
         _scannerService = scannerService;
         _barcodeService = barcodeService;
@@ -34,6 +36,7 @@ public static class ScanController
         _pdfService = pdfService;
         _fileService = fileService;
         _imageService = imageService;
+        _cleanupService = cleanupService;
         Log.Information("ScanController initialized with services");
     }
 
@@ -561,6 +564,45 @@ public static class ScanController
             }
         }
         return null;
+    }
+
+    public static IResult TriggerCleanup()
+    {
+        Log.Information("API: TriggerCleanup called");
+
+        if (_cleanupService == null)
+        {
+            return Results.BadRequest(ApiResponse.Fail("Cleanup service not initialized", "SERVICE_NOT_READY"));
+        }
+
+        try
+        {
+            var result = _cleanupService.CleanupAll();
+            return Results.Ok(ApiResponse<CleanupResult>.Ok(result, "Cleanup completed"));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error during manual cleanup");
+            return Results.BadRequest(ApiResponse.Fail(ex.Message, "CLEANUP_FAILED"));
+        }
+    }
+
+    public static IResult GetCleanupStats()
+    {
+        if (_cleanupService == null)
+        {
+            return Results.Ok(ApiResponse.Fail("Cleanup service not initialized", "SERVICE_NOT_READY"));
+        }
+
+        var (tempCount, outputCount) = _cleanupService.GetFileCounts();
+        var response = new
+        {
+            TempFiles = tempCount,
+            OutputFiles = outputCount,
+            Total = tempCount + outputCount
+        };
+
+        return Results.Ok(ApiResponse.Ok(response, "Stats retrieved"));
     }
 }
 

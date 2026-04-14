@@ -58,6 +58,16 @@ internal static class Program
             builder.Services.AddSingleton<ImageService>(sp =>
                 new ImageService(maxWidth: 200, quality: 50, cacheDurationMinutes: 5));
 
+            var tempFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appSettings.TempFolder);
+            var outputFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, appSettings.OutputFolder);
+            builder.Services.AddSingleton<CleanupService>(sp =>
+                new CleanupService(
+                    tempFolder,
+                    outputFolder,
+                    appSettings.Cleanup.TempRetentionDays,
+                    appSettings.Cleanup.OutputRetentionDays,
+                    appSettings.Cleanup.CleanupIntervalHours));
+
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("AllowAll", policy =>
@@ -86,7 +96,8 @@ internal static class Program
                 app.Services.GetRequiredService<OCRService>(),
                 app.Services.GetRequiredService<PDFService>(),
                 app.Services.GetRequiredService<FileService>(),
-                app.Services.GetRequiredService<ImageService>()
+                app.Services.GetRequiredService<ImageService>(),
+                app.Services.GetRequiredService<CleanupService>()
             );
 
             ApplicationConfiguration.Initialize();
@@ -173,5 +184,13 @@ internal static class Program
         apiGroup.MapGet("/scanner/page-pdf/{index}", ScanController.GetPagePdf)
             .WithName("GetPagePdf")
             .WithTags("Scanner");
+
+        apiGroup.MapPost("/maintenance/cleanup", ScanController.TriggerCleanup)
+            .WithName("TriggerCleanup")
+            .WithTags("Maintenance");
+
+        apiGroup.MapGet("/maintenance/stats", ScanController.GetCleanupStats)
+            .WithName("GetCleanupStats")
+            .WithTags("Maintenance");
     }
 }

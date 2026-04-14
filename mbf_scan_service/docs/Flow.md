@@ -282,6 +282,89 @@ Service xử lý preview ảnh scan để tối ưu hiển thị trên web.
 - Cache tự động cleanup sau 5 phút
 - Cache bị invalidate khi xóa page
 
+---
+
+## Cleanup Service
+
+Service nền tự động dọn dẹp file tạm và file output để giải phóng dung lượng đĩa.
+
+### Cấu Hình (appsettings.json)
+
+```json
+{
+  "Cleanup": {
+    "TempRetentionDays": 1,
+    "OutputRetentionDays": 30,
+    "CleanupIntervalHours": 1
+  }
+}
+```
+
+| Tham số | Mặc định | Mô tả |
+|---------|----------|-------|
+| `TempRetentionDays` | 1 | Số ngày giữ file temp trước khi xóa |
+| `OutputRetentionDays` | 30 | Số ngày giữ file output trước khi xóa |
+| `CleanupIntervalHours` | 1 | Khoảng thời gian giữa các lần cleanup tự động |
+
+### Luồng Hoạt Động
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                      CLEANUP SERVICE CHẠY NỀN                        │
+│  Timer chạy mỗi <CleanupIntervalHours> giờ                           │
+└──────────────────────────────┬───────────────────────────────────────┘
+                               │
+                               ▼
+              ┌────────────────────────────────────┐
+              │ 1. Xóa file temp (.tif) cũ hơn     │
+              │    <TempRetentionDays> ngày         │
+              └─────────────────┬──────────────────┘
+                                │
+                                ▼
+              ┌────────────────────────────────────┐
+              │ 2. Xóa file output (.pdf) cũ hơn   │
+              │    <OutputRetentionDays> ngày        │
+              └─────────────────┬──────────────────┘
+                                │
+                                ▼
+                         Log kết quả cleanup
+```
+
+### API Maintenance
+
+#### Trigger Cleanup Thủ Công
+**API:** `POST /api/maintenance/cleanup`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "tempFilesDeleted": 5,
+    "tempSizeFreed": "12.3 MB",
+    "outputFilesDeleted": 2,
+    "outputSizeFreed": "5.6 MB",
+    "totalSizeFreed": "17.9 MB",
+    "durationMs": 120
+  }
+}
+```
+
+#### Xem Thống Kê File
+**API:** `GET /api/maintenance/stats`
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "tempFiles": 10,
+    "outputFiles": 25,
+    "total": 35
+  }
+}
+```
+
 **Cấu hình trong code (Program.cs):**
 ```csharp
 builder.Services.AddSingleton<ImageService>(sp =>
