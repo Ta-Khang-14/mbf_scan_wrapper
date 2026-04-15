@@ -55,6 +55,7 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
 **Request:**
 ```json
 {
+  "sessionId": "abc123def456",
   "scannerName": "FUJITSU fi-760",
   "settings": {
     "dpi": 300,
@@ -63,6 +64,11 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
   }
 }
 ```
+
+**Quy tắc xử lý Session:**
+- Nếu `sessionId` rỗng: tạo session mới
+- Nếu `sessionId` trùng với session hiện tại: tiếp tục scan, thêm pages vào danh sách (index tiếp tục tăng)
+- Nếu `sessionId` khác session hiện tại: báo lỗi "Phiên scan không đúng"
 
 **Lưu ý:** `MaxPages` (mặc định 400) và `EnableDuplex` (mặc định true) được thiết lập từ server config, client không gửi được.
 

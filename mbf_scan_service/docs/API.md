@@ -89,6 +89,7 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 **Request Body:**
 ```json
 {
+  "sessionId": "abc123def456",
   "scannerName": "FUJITSU fi-760",
   "settings": {
     "dpi": 300,
@@ -100,6 +101,7 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
+| `sessionId` | string | ❌ | Session ID từ lần scan trước. Nếu rỗng sẽ tạo session mới. Nếu có giá trị phải trùng với session hiện tại, nếu khác sẽ báo lỗi "Phiên scan không đúng" |
 | `scannerName` | string | ✅ | Tên máy scan (từ list scanners) |
 | `settings.dpi` | number | ❌ | DPI quét (mặc định: 300) |
 | `settings.colorMode` | string | ❌ | Chế độ màu: `Color`, `BW`, `Gray` (mặc định: `Color`) |
@@ -122,7 +124,10 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 }
 ```
 
-**FE cần thực hiện:** Lưu `sessionId` vào biến để dùng cho các API tiếp theo, mỗi lần scan sẽ thực hiện tạo 1 session mới
+**FE cần thực hiện:**
+- Nếu `sessionId` rỗng: lần scan đầu tiên, server sẽ tạo session mới và trả về `sessionId`
+- Nếu `sessionId` có giá trị: FE gửi lại `sessionId` để tiếp tục scan thêm pages vào session hiện tại (index pages sẽ tiếp tục tăng)
+- Lưu `sessionId` để dùng cho các API tiếp theo
 
 ---
 

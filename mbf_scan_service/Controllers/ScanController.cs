@@ -90,7 +90,8 @@ public static class ScanController
 
     public static IResult Scan(ScanRequest? request)
     {
-        Log.Information("API: Scan called with scanner: {Scanner}", request?.ScannerName);
+        Log.Information("API: Scan called with scanner: {Scanner}, sessionId: {SessionId}",
+            request?.ScannerName, request?.SessionId);
 
         if (string.IsNullOrWhiteSpace(request?.ScannerName))
         {
@@ -107,13 +108,26 @@ public static class ScanController
             ScanSession session;
             lock (_lockObject)
             {
-                session = new ScanSession(request.ScannerName)
+                if (!string.IsNullOrWhiteSpace(request?.SessionId))
                 {
-                    Settings = request?.Settings ?? new ScanSettings()
-                };
-                _currentSession = session;
-                _sessions[session.SessionId] = session;
-                _scannerService.SaveSession(session);
+                    if (_currentSession == null || request.SessionId != _currentSession.SessionId)
+                    {
+                        return Results.BadRequest(ApiResponse.Fail("Phiên scan không đúng", "INVALID_SESSION"));
+                    }
+                    session = _currentSession;
+                    Log.Information("Continuing scan on existing session: {SessionId}", session.SessionId);
+                }
+                else
+                {
+                    session = new ScanSession(request.ScannerName)
+                    {
+                        Settings = request?.Settings ?? new ScanSettings()
+                    };
+                    _currentSession = session;
+                    _sessions[session.SessionId] = session;
+                    _scannerService.SaveSession(session);
+                    Log.Information("Created new session: {SessionId}", session.SessionId);
+                }
             }
 
             _scannerService.SelectScanner(request?.ScannerName!);
@@ -608,6 +622,7 @@ public static class ScanController
 
 public class ScanRequest
 {
+    public string? SessionId { get; set; }
     public string? ScannerName { get; set; }
     public ScanSettings? Settings { get; set; }
 }

@@ -143,7 +143,8 @@ public class ScannerService : IDisposable
             }
 
             _currentSession = session;
-            _currentPageIndex = 0;
+            // Nếu session đã có pages thì tiếp tục từ index cuối, không reset
+            _currentPageIndex = session.Pages.Count;
             _isScanning = true;
             session.Status = ScanStatus.Scanning;
 
