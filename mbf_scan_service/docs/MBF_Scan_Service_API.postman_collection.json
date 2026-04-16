@@ -1,7 +1,7 @@
 {
 	"info": {
 		"name": "MBF Scan Service API",
-		"description": "Postman collection for MBF Scan Service - API đặc tả cho FE tích hợp",
+		"description": "Postman collection for MBF Scan Service - API đặc tả cho FE tích hợp. Hỗ trợ scan, OCR và ký số (Token/SIM).",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -157,18 +157,109 @@
 								"key": "X-Session-Id",
 								"value": "{{sessionId}}",
 								"description": "Session ID từ response của Scan API"
+							},
+							{
+								"key": "X-Web-Token",
+								"value": "",
+								"description": "Web token (bắt buộc nếu cần ký số)"
+							},
+							{
+								"key": "X-Role-Id",
+								"value": "",
+								"description": "Role ID (bắt buộc nếu cần ký SIM)"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "",
+								"description": "User ID (bắt buộc nếu cần ký SIM)"
 							}
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 0,\n          \"fileName\": \"doc1_file1.pdf\",\n          \"pages\": [\n            { \"index\": 0, \"isOCR\": true },\n            { \"index\": 1, \"isOCR\": true }\n          ]\n        },\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 1,\n          \"fileName\": \"doc1_file2.pdf\",\n          \"pages\": [\n            { \"index\": 2, \"isOCR\": false },\n            { \"index\": 3, \"isOCR\": false }\n          ]\n        }\n      ]\n    },\n    {\n      \"docIndex\": 1,\n      \"files\": [\n        {\n          \"docIndex\": 1,\n          \"fileIndex\": 2,\n          \"fileName\": \"doc2_file1.pdf\",\n          \"pages\": [\n            { \"index\": 4, \"isOCR\": true },\n            { \"index\": 5, \"isOCR\": true },\n            { \"index\": 6, \"isOCR\": false }\n          ]\n        }\n      ]\n    }\n  ]\n}"
+							"raw": "{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 0,\n          \"fileName\": \"doc1_file1.pdf\",\n          \"pages\": [\n            { \"index\": 0, \"isOCR\": true },\n            { \"index\": 1, \"isOCR\": true }\n          ],\n          \"signInfo\": {\n            \"phone\": \"0912345678\",\n            \"messageToBeDisplayed\": \"\",\n            \"filePath\": \"\",\n            \"fileBase64\": \"\",\n            \"fileName\": \"doc1_file1.pdf\",\n            \"uploadUrl\": \"/upload-signed\",\n            \"signType\": 0,\n            \"folderKey\": \"folder-123\",\n            \"listSignatureInfo\": [\n              {\n                \"page\": 1,\n                \"x\": 100.00,\n                \"y\": 50.00,\n                \"signType\": \"IMAGE\",\n                \"text\": \"\",\n                \"imageWidth\": 135,\n                \"imageHeight\": 75,\n                \"base64Image\": \"iVBORw0KGgoAAAANSUhEUg...\"\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ]\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/scanner/process",
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "process"]
 						},
-						"description": "Tạo PDF và OCR theo danh sách documents/files từ client.\n\nBody params (cấu trúc Documents - khuyến nghị):\n- `documents[]`: danh sách documents\n- `documents[].files[]`: danh sách files trong document\n- `documents[].files[].fileName`: tên file PDF (do client quyết định)\n- `documents[].files[].pageIndices`: danh sách page indices để ghép thành file\n\nHoặc dùng cấu trúc legacy (files):\n- `files[]`: danh sách files thẳng (không có documents)\n\nResponse trả về kết quả nhóm theo documents:\n{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        { \"fileIndex\": 0, \"fileId\": \"...\", \"fileName\": \"...\", \"downloadUrl\": \"...\", ... }\n      ]\n    }\n  ]\n}"
+						"description": "Tạo PDF, OCR và ký số (tùy chọn).\n\nHeaders bắt buộc cho ký số:\n- X-Web-Token: Web token authentication\n- X-Role-Id: Role ID của user\n- X-User-Id: User ID của user\n\nSignType:\n- 0: Ký Token (không cần X-Role-Id, X-User-Id)\n- 1: Ký SIM (cần tất cả headers)\n\nResponse trả về thêm các fields:\n- signedFileUrl: URL file đã ký\n- signedFilePath: Server path của file đã ký\n- signSuccess: Trạng thái ký số"
+					},
+					"response": []
+				},
+				{
+					"name": "7a. Process Scan (With Sign - Token)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							},
+							{
+								"key": "X-Web-Token",
+								"value": "",
+								"description": "Web token cho ký Token"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 0,\n          \"fileName\": \"doc1_file1.pdf\",\n          \"pages\": [\n            { \"index\": 0, \"isOCR\": true }\n          ],\n          \"signInfo\": {\n            \"phone\": \"0912345678\",\n            \"signType\": 0,\n            \"listSignatureInfo\": [\n              {\n                \"page\": 1,\n                \"x\": 100.00,\n                \"y\": 50.00,\n                \"signType\": \"IMAGE\",\n                \"imageWidth\": 135,\n                \"imageHeight\": 75,\n                \"base64Image\": \"iVBORw0KGgoAAAANSUhEUg...\"\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "process"]
+						},
+						"description": "Process scan với ký Token (SignType = 0).\n\nChỉ cần X-Web-Token, không cần X-Role-Id và X-User-Id."
+					},
+					"response": []
+				},
+				{
+					"name": "7b. Process Scan (With Sign - SIM)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "X-Session-Id",
+								"value": "{{sessionId}}",
+								"description": "Session ID từ response của Scan API"
+							},
+							{
+								"key": "X-Web-Token",
+								"value": "",
+								"description": "Web token"
+							},
+							{
+								"key": "X-Role-Id",
+								"value": "",
+								"description": "Role ID"
+							},
+							{
+								"key": "X-User-Id",
+								"value": "",
+								"description": "User ID"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"documents\": [\n    {\n      \"docIndex\": 0,\n      \"files\": [\n        {\n          \"docIndex\": 0,\n          \"fileIndex\": 0,\n          \"fileName\": \"doc1_file1.pdf\",\n          \"pages\": [\n            { \"index\": 0, \"isOCR\": true }\n          ],\n          \"signInfo\": {\n            \"phone\": \"0912345678\",\n            \"signType\": 1,\n            \"listSignatureInfo\": [\n              {\n                \"page\": 1,\n                \"x\": 100.00,\n                \"y\": 50.00,\n                \"signType\": \"IMAGE\",\n                \"imageWidth\": 135,\n                \"imageHeight\": 75,\n                \"base64Image\": \"iVBORw0KGgoAAAANSUhEUg...\"\n              }\n            ]\n          }\n        }\n      ]\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/scanner/process",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "scanner", "process"]
+						},
+						"description": "Process scan với ký SIM (SignType = 1).\n\nCần tất cả headers: X-Web-Token, X-Role-Id, X-User-Id."
 					},
 					"response": []
 				}
@@ -253,6 +344,24 @@
 			"value": "",
 			"type": "string",
 			"description": "File ID - copy từ response của Process Scan"
+		},
+		{
+			"key": "webToken",
+			"value": "",
+			"type": "string",
+			"description": "Web token cho authentication (bắt buộc khi ký số)"
+		},
+		{
+			"key": "roleId",
+			"value": "",
+			"type": "string",
+			"description": "Role ID - bắt buộc khi ký SIM"
+		},
+		{
+			"key": "userId",
+			"value": "",
+			"type": "string",
+			"description": "User ID - bắt buộc khi ký SIM"
 		}
 	]
 }

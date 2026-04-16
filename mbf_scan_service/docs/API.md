@@ -342,7 +342,7 @@ Xóa 1 page khỏi session.
 
 ### 2.7 Process Scan - Xử Lý Scan
 
-Tạo PDF và OCR theo danh sách documents/files từ client.
+Tạo PDF, OCR và ký số (tùy chọn) theo danh sách documents/files từ client.
 
 | | |
 |---|---|
@@ -355,6 +355,9 @@ Tạo PDF và OCR theo danh sách documents/files từ client.
 | Header | Required | Description |
 |--------|----------|-------------|
 | `X-Session-Id` | ❌ | Session ID |
+| `X-Web-Token` | ❌ | Web token (bắt buộc nếu cần ký số) |
+| `X-Role-Id` | ❌ | Role ID (bắt buộc nếu cần ký SIM) |
+| `X-User-Id` | ❌ | User ID (bắt buộc nếu cần ký SIM) |
 
 **Request Body (Cấu trúc Documents - khuyến nghị):**
 ```json
@@ -370,7 +373,29 @@ Tạo PDF và OCR theo danh sách documents/files từ client.
           "pages": [
             { "index": 0, "isOCR": true },
             { "index": 1, "isOCR": true }
-          ]
+          ],
+          "signInfo": {
+            "phone": "0912345678",
+            "messageToBeDisplayed": "",
+            "filePath": "",
+            "fileBase64": "",
+            "fileName": "12345678_13042026_105604.pdf",
+            "uploadUrl": "",
+            "signType": 0,
+            "folderKey": "",
+            "listSignatureInfo": [
+              {
+                "page": 1,
+                "x": 100.00,
+                "y": 50.00,
+                "signType": "IMAGE",
+                "text": "",
+                "imageWidth": 135,
+                "imageHeight": 75,
+                "base64Image": "iVBORw0KGgoAAAANSUhEUg..."
+              }
+            ]
+          }
         },
         {
           "docIndex": 0,
@@ -439,6 +464,7 @@ Tạo PDF và OCR theo danh sách documents/files từ client.
 | `documents[].files[].pages` | array | ✅ | Danh sách pages trong file |
 | `documents[].files[].pages[].index` | number | ✅ | Index của page (0-based) |
 | `documents[].files[].pages[].isOCR` | boolean | ✅ | Thực hiện OCR trên page này (mặc định: false) |
+| `documents[].files[].signInfo` | object | ❌ | Thông tin ký số (nếu cần ký số) |
 | `files` | array | ❌ | Danh sách files (legacy - dùng khi không có documents) |
 | `files[].docIndex` | number | ✅ | Index của document (mặc định: 0) |
 | `files[].fileIndex` | number | ✅ | Index của file (0-based) |
@@ -446,6 +472,50 @@ Tạo PDF và OCR theo danh sách documents/files từ client.
 | `files[].pages` | array | ✅ | Danh sách pages trong file |
 | `files[].pages[].index` | number | ✅ | Index của page (0-based) |
 | `files[].pages[].isOCR` | boolean | ✅ | Thực hiện OCR trên page này (mặc định: false) |
+
+### SignInfo Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `phone` | string | ✅ (ký SIM) | Số điện thoại đăng ký ký số (bắt buộc khi SignType=1) |
+| `messageToBeDisplayed` | string | ❌ | Thông điệp hiển thị khi ký |
+| `filePath` | string | ❌ | Đường dẫn file (backend tự set sau khi tạo PDF) |
+| `fileBase64` | string | ❌ | File dưới dạng Base64 (backend tự convert nếu không truyền) |
+| `fileName` | string | ✅ | Tên file PDF cần ký |
+| `uploadUrl` | string | ❌ | URL upload sau khi ký (mặc định: /upload-signed) |
+| `signType` | number | ✅ | 0 - Ký Token, 1 - Ký SIM |
+| `folderKey` | string | ❌ | Folder key (backend tự lấy nếu không truyền) |
+| `listSignatureInfo` | array | ✅ | SignatureInfo Danh sách vị trí ký trên trang |
+
+### SignatureInfo Object
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `page` | number | ✅ | Số trang cần ký (1-based) |
+| `x` | number | ✅ | Tọa độ X của vị trí ký |
+| `y` | number | ✅ | Tọa độ Y của vị trí ký |
+| `signType` | string | ✅ | "IMAGE" hoặc "TEXT" |
+| `text` | string | ❌ | Text hiển thị (nếu signType = TEXT) |
+| `imageWidth` | number | ✅ | Chiều rộng ảnh chữ ký |
+| `imageHeight` | number |✅ | Chiều cao ảnh chữ ký |
+| `base64Image` | string | ✅ | Ảnh chữ ký dưới dạng Base64 |
+
+### SignApiResponse Object (Response từ API ký số)
+
+Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiResponse`:
+
+|| Field | Type | Description |
+|-------|------|-------------|
+| `success` | boolean | Trạng thái ký số |
+| `message` | string | Thông điệp kết quả |
+| `data` | object | Data object (có thể null nếu API trả flat format) |
+| `errors` | array | Danh sách lỗi (nếu có) |
+| `fileName` | string | Tên file đã ký (root-level) |
+| `filePath` | string | Server path của file đã ký (root-level) |
+| `fileServer` | string | Server path thay thế (root-level) |
+| `extension` | string | Đuôi file (root-level) |
+| `folderKey` | string | Folder key của file (root-level) |
+| `description` | string | Mô tả file (root-level) |
 
 **Response:**
 ```json
@@ -470,7 +540,10 @@ Tạo PDF và OCR theo danh sách documents/files từ client.
             "totalPages": 2,
             "fileSize": 1024000,
             "ocrResult": "Nội dung văn bản được OCR...",
-            "createdAt": "2026-04-13T10:58:00"
+            "createdAt": "2026-04-13T10:58:00",
+            "signedFileUrl": "https://api.example.com/signed/folder-123/12345678_signed.pdf",
+            "signedFilePath": "/signed/folder-123/12345678_signed.pdf",
+            "signSuccess": true
           },
           {
             "docIndex": 0,
@@ -505,6 +578,13 @@ Tạo PDF và OCR theo danh sách documents/files từ client.
   }
 }
 ```
+
+**Response Fields (Sign):**
+| Field | Type | Description |
+|-------|------|-------------|
+| `signedFileUrl` | string? | URL file đã ký (null nếu không ký số) |
+| `signedFilePath` | string? | Server path của file đã ký |
+| `signSuccess` | bool | Trạng thái ký số (false nếu không ký) |
 
 ---
 

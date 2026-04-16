@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using mbf_scan_service.Controllers;
+using System.Net.Http;
 using System.Text.Json;
 
 namespace mbf_scan_service;
@@ -68,6 +69,18 @@ internal static class Program
                     appSettings.Cleanup.OutputRetentionDays,
                     appSettings.Cleanup.CleanupIntervalHours));
 
+            builder.Services.AddHttpClient<SignService>()
+                .ConfigureHttpClient((_, client) =>
+                {
+                    client.Timeout = TimeSpan.FromMinutes(5);
+                });
+            builder.Services.AddSingleton(sp =>
+            {
+                var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+                var httpClient = httpClientFactory.CreateClient("SignService");
+                return new SignService(appSettings.Sign, httpClient);
+            });
+
             builder.Services.AddCors(options =>
             {
                 options.AddPolicy("AllowAll", policy =>
@@ -97,7 +110,8 @@ internal static class Program
                 app.Services.GetRequiredService<PDFService>(),
                 app.Services.GetRequiredService<FileService>(),
                 app.Services.GetRequiredService<ImageService>(),
-                app.Services.GetRequiredService<CleanupService>()
+                app.Services.GetRequiredService<CleanupService>(),
+                app.Services.GetRequiredService<SignService>()
             );
 
             ApplicationConfiguration.Initialize();

@@ -21,6 +21,14 @@ public class AppSettings
 {
     public ScannerConfig Scanner { get; set; } = new();
     public CleanupConfig Cleanup { get; set; } = new();
+    public SignConfig Sign { get; set; } = new();
     public string TempFolder { get; set; } = "temp";
     public string OutputFolder { get; set; } = "output";
+}
+
+public class SignConfig
+{
+    public string UrlApi { get; set; } = "";
+    public string UrlSignTokenPdf { get; set; } = "";
+    public string UrlUploadPath { get; set; } = "";
 }

@@ -20,6 +20,7 @@ public static class ScanController
     private static FileService? _fileService;
     private static ImageService? _imageService;
     private static CleanupService? _cleanupService;
+    private static SignService? _signService;
 
     public static void Initialize(
         ScannerService scannerService,
@@ -28,7 +29,8 @@ public static class ScanController
         PDFService pdfService,
         FileService fileService,
         ImageService imageService,
-        CleanupService cleanupService)
+        CleanupService cleanupService,
+        SignService signService)
     {
         _scannerService = scannerService;
         _barcodeService = barcodeService;
@@ -37,6 +39,7 @@ public static class ScanController
         _fileService = fileService;
         _imageService = imageService;
         _cleanupService = cleanupService;
+        _signService = signService;
         Log.Information("ScanController initialized with services");
     }
 
@@ -314,6 +317,13 @@ public static class ScanController
 
         try
         {
+            var webToken = context.Request.Headers["X-Web-Token"].FirstOrDefault();
+            var roleId = context.Request.Headers["X-Role-Id"].FirstOrDefault();
+            var userId = context.Request.Headers["X-User-Id"].FirstOrDefault();
+
+            Log.Information("ProcessScan headers - WebToken: {HasToken}, RoleId: {RoleId}, UserId: {UserId}",
+                !string.IsNullOrEmpty(webToken), roleId, userId);
+
             ProcessRequest? request = null;
             if (context.Request.ContentLength > 0)
             {
@@ -362,7 +372,7 @@ public static class ScanController
                             .ToList();
 
                         var ocrPages = fileRequest.Pages
-                            .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
+                            .Where(p => false)
                             .Select(p => session.Pages[p.Index])
                             .ToList();
 
@@ -372,7 +382,8 @@ public static class ScanController
                         var fileResult = CreateScanFile(
                             session, filePages, ocrPages, fileRequest.FileName,
                             context.Request.Scheme, context.Request.Host,
-                            fileRequest.DocIndex, fileRequest.FileIndex);
+                            fileRequest.DocIndex, fileRequest.FileIndex,
+                            fileRequest.SignInfo, webToken, roleId, userId);
                         if (fileResult != null)
                         {
                             docResponse.Files.Add(fileResult);
@@ -413,7 +424,8 @@ public static class ScanController
                     var fileResult = CreateScanFile(
                         session, filePages, ocrPages, fileRequest.FileName,
                         context.Request.Scheme, context.Request.Host,
-                        fileRequest.DocIndex, fileRequest.FileIndex);
+                        fileRequest.DocIndex, fileRequest.FileIndex,
+                        fileRequest.SignInfo, webToken, roleId, userId);
                     if (fileResult != null)
                     {
                         docResponse.Files.Add(fileResult);
@@ -533,7 +545,11 @@ public static class ScanController
         string scheme,
         HostString host,
         int docIndex,
-        int fileIndex)
+        int fileIndex,
+        SignInfo? signInfo = null,
+        string? webToken = null,
+        string? roleId = null,
+        string? userId = null)
     {
         var fileId = Guid.NewGuid().ToString("N")[..8];
         var pdfPath = _pdfService?.CreatePdfFromPages(filePages, fileId);
@@ -563,7 +579,7 @@ public static class ScanController
 
                 session.Files.Add(scanFile);
 
-                return new ProcessFileResponse
+                var fileResponse = new ProcessFileResponse
                 {
                     DocIndex = docIndex,
                     FileIndex = fileIndex,
@@ -573,8 +589,47 @@ public static class ScanController
                     TotalPages = scanFile.Pages.Count,
                     FileSize = scanFile.FileSize,
                     OCRResult = scanFile.OCRResult,
-                    CreatedAt = scanFile.CreatedAt
+                    CreatedAt = scanFile.CreatedAt,
+                    SignSuccess = false
                 };
+
+                if (signInfo != null && _signService != null)
+                {
+                    Log.Information("Starting sign process for file: {FileName}, SignType: {SignType}", fileName, signInfo.SignType);
+
+                    signInfo.FilePath = pdfPath;
+                    signInfo.FileName = scanFile.FileName;
+
+                    if (signInfo.SignType == 0 && string.IsNullOrEmpty(signInfo.FileBase64))
+                    {
+                        try
+                        {
+                            var fileBytes = File.ReadAllBytes(pdfPath);
+                            signInfo.FileBase64 = Convert.ToBase64String(fileBytes);
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, "Failed to read file for Base64 encoding");
+                        }
+                    }
+
+                    var signResult = _signService.SignAsync(signInfo, webToken, roleId, userId).GetAwaiter().GetResult();
+
+                    if (signResult.IsSuccess)
+                    {
+                        fileResponse.SignedFileUrl = signResult.SignedFileUrl;
+                        fileResponse.SignedFilePath = signResult.SignedFilePath;
+                        fileResponse.SignSuccess = true;
+                        Log.Information("Sign successful for file: {FileName}, SignedUrl: {SignedUrl}", fileName, signResult.SignedFileUrl);
+                    }
+                    else
+                    {
+                        fileResponse.SignSuccess = false;
+                        Log.Warning("Sign failed for file: {FileName}, Error: {Error}", fileName, signResult.ErrorMessage);
+                    }
+                }
+
+                return fileResponse;
             }
         }
         return null;

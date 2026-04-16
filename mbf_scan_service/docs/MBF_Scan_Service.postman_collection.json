@@ -1,0 +1,111 @@
+{
+	"info": {
+		"_postman_id": "mbf-scan-service",
+		"name": "MBF Scan Service",
+		"description": "API collection for MBF Scan Service",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. List Scanners",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseUrl}}/api/scanner/list",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "scanner", "list"]
+				},
+				"description": "Lấy danh sách máy scan khả dụng"
+			}
+		},
+		{
+			"name": "2. Scan",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"sessionId\": \"\",\n    \"scannerName\": \"FUJITSU fi-760\",\n    \"settings\": {\n        \"dpi\": 300,\n        \"colorMode\": \"Color\",\n        \"paperSize\": \"A4\"\n    }\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/scanner/scan",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "scanner", "scan"]
+				},
+				"description": "Quét tài liệu. Nếu sessionId rỗng sẽ tạo session mới, nếu có giá trị sẽ tiếp tục scan thêm vào session hiện tại."
+			}
+		},
+		{
+			"name": "3. Detect Files",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "X-Session-Id",
+						"value": "{{sessionId}}"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/scanner/pages",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "scanner", "pages"]
+				},
+				"description": "Lấy danh sách pages đã scan, detect barcode và group thành documents/files"
+			}
+		},
+		{
+			"name": "7. Process Scan",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-Session-Id",
+						"value": "{{sessionId}}"
+					},
+					{
+						"key": "X-Web-Token",
+						"value": ""
+					},
+					{
+						"key": "X-Role-Id",
+						"value": ""
+					},
+					{
+						"key": "X-User-Id",
+						"value": ""
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"documents\": [\n        {\n            \"docIndex\": 0,\n            \"files\": [\n                {\n                    \"docIndex\": 0,\n                    \"fileIndex\": 0,\n                    \"fileName\": \"12345678_15042026_120000.pdf\",\n                    \"pages\": [\n                        { \"index\": 0, \"isOCR\": true },\n                        { \"index\": 1, \"isOCR\": true }\n                    ]\n                }\n            ]\n        }\n    ]\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/scanner/process",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "scanner", "process"]
+				},
+				"description": "Xử lý scan: tạo PDF, OCR, ký số (tùy chọn)"
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:5000"
+		},
+		{
+			"key": "sessionId",
+			"value": ""
+		}
+	]
+}

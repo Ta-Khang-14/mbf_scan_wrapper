@@ -2,7 +2,7 @@
 
 ## Tổng Quan
 
-Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF và OCR.
+Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF, OCR và ký số.
 
 ---
 
@@ -24,6 +24,12 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
   GET /scanner   POST /scanner     GET /scanner       POST /scanner
       /list          /scan            /pages             /process
                                     DELETE /pages
+
+                                    [Tùy chọn: Ký Số]
+                                          │
+                                          ▼
+                                    POST /scanner/process
+                                    (kèm SignInfo)
 ```
 
 ---
@@ -212,6 +218,51 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
         "createdAt": "2026-04-09T10:30:00"
       }
     ]
+  }
+}
+```
+
+---
+
+## Luồng Ký Số (Tùy Chọn)
+
+Sau khi tạo PDF, có thể thực hiện ký số trên file PDF.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         LUỒNG KÝ SỐ TÍCH HỢP                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  1. FE gọi POST /api/scanner/process với SignInfo trong body
+  2. Backend tạo PDF bình thường
+  3. Nếu có SignInfo → Gọi SignService để ký số
+  4. SignService xử lý ký token hoặc ký SIM
+  5. Backend cập nhật signedFileUrl = filePath đã ký + URL_API
+  6. Trả response về cho FE
+```
+
+### Hai Phương Thức Ký
+
+| Phương thức | SignType | Mô tả |
+|-------------|----------|--------|
+| Ký Token | 0 | Hash file → gọi API ký → trả về signedFileUrl |
+| Ký SIM | 1 | Upload file trước → gọi API ký SIM → trả về signedFileUrl |
+
+### Headers Bắt Buộc (Ký Số)
+
+| Header | Required | Mô tả |
+|--------|----------|--------|
+| `X-Web-Token` | Có | Web token cho authentication |
+| `X-Role-Id` | Có | Role ID của user |
+| `X-User-Id` | Có | User ID của user |
+
+### Cấu Hình Ký Số (appsettings.json)
+
+```json
+{
+  "Sign": {
+    "UrlApi": "https://api.example.com",
+    "UrlSignTokenPdf": "https://sign.example.com"
   }
 }
 ```
