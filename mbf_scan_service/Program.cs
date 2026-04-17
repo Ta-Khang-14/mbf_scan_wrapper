@@ -155,6 +155,10 @@ internal static class Program
             .WithName("ListScanners")
             .WithTags("Scanner");
 
+        apiGroup.MapGet("/scanner/diagnostic", Controllers.ScanController.RunDiagnostic)
+            .WithName("RunDiagnostic")
+            .WithTags("Scanner");
+
         apiGroup.MapPost("/scanner/scan", Controllers.ScanController.Scan)
             .WithName("Scan")
             .WithTags("Scanner");

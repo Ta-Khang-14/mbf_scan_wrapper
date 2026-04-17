@@ -91,6 +91,20 @@ public static class ScanController
         }
     }
 
+    public static IResult RunDiagnostic()
+    {
+        try
+        {
+            var result = ScannerService.RunDiagnostic();
+            return Results.Ok(ApiResponse<DiagnosticResult>.Ok(result, result.Summary));
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error running diagnostic");
+            return Results.BadRequest(ApiResponse.Fail(ex.Message, "DIAGNOSTIC_FAILED"));
+        }
+    }
+
     public static IResult Scan(ScanRequest? request)
     {
         Log.Information("API: Scan called with scanner: {Scanner}, sessionId: {SessionId}",

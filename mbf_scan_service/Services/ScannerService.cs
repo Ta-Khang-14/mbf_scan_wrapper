@@ -75,6 +75,460 @@ public class ScannerService : IDisposable
         return scanners;
     }
 
+    public static DiagnosticResult RunDiagnostic()
+    {
+        var result = new DiagnosticResult { Items = new List<DiagnosticItem>() };
+        int passed = 0, failed = 0, warnings = 0;
+
+        // 1. Kiểm tra TWAIN DSM
+        var twainDsmItem = CheckTwainDSM();
+        result.Items.Add(twainDsmItem);
+        UpdateCounts(twainDsmItem.Status, ref passed, ref failed, ref warnings);
+
+        // 2. Kiểm tra TWAIN Registry
+        var twainRegItem = CheckTwainRegistry();
+        result.Items.Add(twainRegItem);
+        UpdateCounts(twainRegItem.Status, ref passed, ref failed, ref warnings);
+
+        // 3. Kiểm tra FUJITSU Driver
+        var fujitsuDriverItem = CheckFujitsuDriver();
+        result.Items.Add(fujitsuDriverItem);
+        UpdateCounts(fujitsuDriverItem.Status, ref passed, ref failed, ref warnings);
+
+        // 4. Kiểm tra FUJITSU Registry
+        var fujitsuRegItem = CheckFujitsuRegistry();
+        result.Items.Add(fujitsuRegItem);
+        UpdateCounts(fujitsuRegItem.Status, ref passed, ref failed, ref warnings);
+
+        // 5. Kiểm tra PaperStream
+        var paperStreamItem = CheckPaperStream();
+        result.Items.Add(paperStreamItem);
+        UpdateCounts(paperStreamItem.Status, ref passed, ref failed, ref warnings);
+
+        // 6. Kiểm tra TWAIN Source Enumeration
+        var twainSourceItem = CheckTwainSources();
+        result.Items.Add(twainSourceItem);
+        UpdateCounts(twainSourceItem.Status, ref passed, ref failed, ref warnings);
+
+        // 7. Kiểm tra USB Connection
+        var usbItem = CheckUSBConnection();
+        result.Items.Add(usbItem);
+        UpdateCounts(usbItem.Status, ref passed, ref failed, ref warnings);
+
+        result.Summary = $"Passed: {passed}, Failed: {failed}, Warnings: {warnings}";
+        result.Success = failed == 0;
+        return result;
+    }
+
+    private static void UpdateCounts(string status, ref int passed, ref int failed, ref int warnings)
+    {
+        switch (status.ToUpperInvariant())
+        {
+            case "PASS": passed++; break;
+            case "FAIL": failed++; break;
+            case "WARN": warnings++; break;
+        }
+    }
+
+    private static DiagnosticItem CheckTwainDSM()
+    {
+        var item = new DiagnosticItem { Category = "TWAIN DSM", Name = "TWAIN DSM Library" };
+        try
+        {
+            // Thử load TWAIN DSM thực sự bằng cách tạo TwainSession
+            var appId = TWIdentity.CreateFromAssembly(DataGroups.Image, Assembly.GetExecutingAssembly());
+            TwainSession? twain = null;
+            try
+            {
+                twain = new TwainSession(appId);
+                twain.Open();
+                twain.Close();
+                twain = null;
+
+                item.Status = "PASS";
+                item.Message = "TWAIN DSM loaded successfully";
+                item.Details = "TwainSession created and opened without errors";
+            }
+            catch
+            {
+                // Nếu không mở được, thử kiểm tra file
+                var dllPaths = new[]
+                {
+                    @"C:\Windows\SysWOW64\TWAIN_32.DLL",
+                    @"C:\Windows\SysWOW64\TWAIN.DLL",
+                    @"C:\Windows\System32\TWAIN_32.DLL",
+                    @"C:\Windows\System32\TWAIN.DLL",
+                    @"C:\Windows\System32\twain_32.dll",
+                    @"C:\Windows\SysWOW64\twain_32.dll"
+                };
+
+                var foundPaths = dllPaths.Where(File.Exists).ToList();
+                if (foundPaths.Count > 0)
+                {
+                    item.Status = "PASS";
+                    item.Message = "TWAIN DSM DLL found";
+                    item.Details = string.Join(", ", foundPaths.Select(Path.GetFileName));
+                }
+                else
+                {
+                    item.Status = "WARN";
+                    item.Message = "TWAIN DSM file not in standard location";
+                    item.Details = "May be loaded from driver folder";
+                    item.Suggestion = "If scan works, this warning can be ignored";
+                }
+            }
+            finally
+            {
+                if (twain != null)
+                {
+                    try { twain.Close(); } catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "FAIL";
+            item.Message = "Error checking TWAIN DSM";
+            item.Details = ex.Message;
+        }
+        return item;
+    }
+
+    private static DiagnosticItem CheckTwainRegistry()
+    {
+        var item = new DiagnosticItem { Category = "Registry", Name = "TWAIN Registry Keys" };
+        try
+        {
+            // Thử kiểm tra bằng cách enumerate TWAIN sources (cách reliable nhất)
+            var appId = TWIdentity.CreateFromAssembly(DataGroups.Image, Assembly.GetExecutingAssembly());
+            TwainSession? twain = null;
+            try
+            {
+                twain = new TwainSession(appId);
+                twain.Open();
+                var sourceCount = twain.Count();
+                twain.Close();
+                twain = null;
+
+                if (sourceCount > 0)
+                {
+                    item.Status = "PASS";
+                    item.Message = "TWAIN DSM and sources available";
+                    item.Details = $"{sourceCount} source(s) found";
+                }
+                else
+                {
+                    item.Status = "PASS";
+                    item.Message = "TWAIN DSM loaded (no sources without scanner)";
+                    item.Details = "DSM available, connect scanner to enumerate sources";
+                }
+            }
+            catch
+            {
+                // Fallback: check registry
+                var registryPaths = new[]
+                {
+                    @"SOFTWARE\TWAIN",
+                    @"SOFTWARE\WOW6432Node\TWAIN",
+                    @"SOFTWARE\WOW6432Node\TWAIN\ThirdParty"
+                };
+
+                var foundKeys = new List<string>();
+                using var baseKey = Microsoft.Win32.Registry.LocalMachine;
+
+                foreach (var path in registryPaths)
+                {
+                    try
+                    {
+                        using var key = baseKey.OpenSubKey(path);
+                        if (key != null)
+                        {
+                            foundKeys.Add(path);
+                        }
+                    }
+                    catch { }
+                }
+
+                if (foundKeys.Count > 0)
+                {
+                    item.Status = "PASS";
+                    item.Message = "TWAIN registry keys found";
+                    item.Details = string.Join(", ", foundKeys);
+                }
+                else
+                {
+                    item.Status = "WARN";
+                    item.Message = "TWAIN registry not in standard location";
+                    item.Suggestion = "If scan works, this warning can be ignored";
+                }
+            }
+            finally
+            {
+                if (twain != null)
+                {
+                    try { twain.Close(); } catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "FAIL";
+            item.Message = "Error checking TWAIN DSM";
+            item.Details = ex.Message;
+        }
+        return item;
+    }
+
+    private static DiagnosticItem CheckFujitsuDriver()
+    {
+        var item = new DiagnosticItem { Category = "Driver", Name = "FUJITSU USB Driver" };
+        try
+        {
+            using var baseKey = Microsoft.Win32.Registry.LocalMachine;
+            var fujiKey = baseKey.OpenSubKey(@"SOFTWARE\WOW6432Node\FUJITSU") ??
+                          baseKey.OpenSubKey(@"SOFTWARE\FUJITSU");
+
+            if (fujiKey != null)
+            {
+                item.Status = "PASS";
+                item.Message = "FUJITSU driver registry found";
+                item.Details = fujiKey.Name;
+            }
+            else
+            {
+                item.Status = "FAIL";
+                item.Message = "FUJITSU driver not installed";
+                item.Suggestion = "Install FUJITSU PaperStream IP (TWAIN) driver from https://www.pfu.ricoh.com/global/scanners/fi/dl/";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "WARN";
+            item.Message = "Error checking FUJITSU driver";
+            item.Details = ex.Message;
+        }
+        return item;
+    }
+
+    private static DiagnosticItem CheckFujitsuRegistry()
+    {
+        var item = new DiagnosticItem { Category = "Registry", Name = "FUJITSU TWAIN Source" };
+        try
+        {
+            var keys = new[]
+            {
+                @"SOFTWARE\WOW6432Node\TWAIN\ThirdParty",
+                @"SOFTWARE\TWAIN\ThirdParty",
+                @"SOFTWARE\WOW6432Node\TWAIN",
+                @"SOFTWARE\TWAIN"
+            };
+
+            bool found = false;
+            var foundPaths = new List<string>();
+            using var baseKey = Microsoft.Win32.Registry.LocalMachine;
+
+            foreach (var keyPath in keys)
+            {
+                try
+                {
+                    using var key = baseKey.OpenSubKey(keyPath);
+                    if (key != null)
+                    {
+                        var subKeys = key.GetSubKeyNames();
+                        var fujiRelated = subKeys.Where(k => k.Contains("FUJITSU", StringComparison.OrdinalIgnoreCase) ||
+                                                            k.Contains("fi-", StringComparison.OrdinalIgnoreCase) ||
+                                                            k.Contains("PaperStream", StringComparison.OrdinalIgnoreCase)).ToList();
+                        foreach (var fujiKey in fujiRelated)
+                        {
+                            foundPaths.Add($"{keyPath}\\{fujiKey}");
+                        }
+                        if (fujiRelated.Count > 0)
+                        {
+                            found = true;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            if (found)
+            {
+                item.Status = "PASS";
+                item.Message = "FUJITSU TWAIN source registered";
+                item.Details = string.Join(", ", foundPaths);
+            }
+            else
+            {
+                item.Status = "FAIL";
+                item.Message = "FUJITSU TWAIN source not registered";
+                item.Suggestion = "Reinstall PaperStream IP (TWAIN) driver completely. If using fi-7140, download driver from https://www.pfu.ricoh.com/global/scanners/fi/dl/";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "WARN";
+            item.Message = "Error checking FUJITSU registry";
+            item.Details = ex.Message;
+        }
+        return item;
+    }
+
+    private static DiagnosticItem CheckPaperStream()
+    {
+        var item = new DiagnosticItem { Category = "Software", Name = "PaperStream IP" };
+        try
+        {
+            var programPaths = new[]
+            {
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86)
+            };
+
+            var paperStreamPaths = new List<string>();
+            foreach (var basePath in programPaths)
+            {
+                try
+                {
+                    var dirs = Directory.GetDirectories(basePath, "*PaperStream*", SearchOption.TopDirectoryOnly);
+                    paperStreamPaths.AddRange(dirs);
+                }
+                catch { }
+            }
+
+            if (paperStreamPaths.Count > 0)
+            {
+                item.Status = "PASS";
+                item.Message = "PaperStream IP installed";
+                item.Details = string.Join(", ", paperStreamPaths);
+            }
+            else
+            {
+                item.Status = "WARN";
+                item.Message = "PaperStream IP not found";
+                item.Suggestion = "Install PaperStream IP (TWAIN) driver for full scanner support";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "WARN";
+            item.Message = "Error checking PaperStream";
+            item.Details = ex.Message;
+        }
+        return item;
+    }
+
+    private static DiagnosticItem CheckTwainSources()
+    {
+        var item = new DiagnosticItem { Category = "TWAIN", Name = "TWAIN Source Enumeration" };
+        TwainSession? twain = null;
+        try
+        {
+            var appId = TWIdentity.CreateFromAssembly(DataGroups.Image, Assembly.GetExecutingAssembly());
+            twain = new TwainSession(appId);
+            twain.Open();
+
+            var sources = new List<string>();
+            foreach (var ds in twain)
+            {
+                sources.Add(ds.Name ?? "Unknown");
+            }
+            twain.Close();
+
+            if (sources.Count > 0)
+            {
+                item.Status = "PASS";
+                item.Message = $"Found {sources.Count} TWAIN source(s)";
+                item.Details = string.Join(", ", sources);
+            }
+            else
+            {
+                item.Status = "FAIL";
+                item.Message = "No TWAIN sources found";
+                item.Suggestion = "1. Check USB connection to scanner\n2. Reinstall PaperStream IP (TWAIN) driver\n3. Run Windows Update to install TWAIN components";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "FAIL";
+            item.Message = "TWAIN enumeration failed";
+            item.Details = $"{ex.GetType().Name}: {ex.Message}";
+            item.Suggestion = "Check TWAIN DSM and driver installation";
+        }
+        finally
+        {
+            if (twain != null)
+            {
+                try { twain.Close(); } catch { }
+            }
+        }
+        return item;
+    }
+
+    private static DiagnosticItem CheckUSBConnection()
+    {
+        var item = new DiagnosticItem { Category = "Hardware", Name = "USB Scanner Connection" };
+        try
+        {
+            using var baseKey = Microsoft.Win32.Registry.LocalMachine;
+            using var usbKey = baseKey.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\USB");
+            using var enumKey = baseKey.OpenSubKey(@"SYSTEM\CurrentControlSet\Enum\USB");
+
+            if (usbKey == null)
+            {
+                item.Status = "WARN";
+                item.Message = "USB registry not accessible";
+                return item;
+            }
+
+            var usbDevices = new List<string>();
+            if (enumKey != null)
+            {
+                foreach (var vidKeyName in enumKey.GetSubKeyNames())
+                {
+                    if (!vidKeyName.StartsWith("VID_", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    using var vidKey = enumKey.OpenSubKey(vidKeyName);
+                    if (vidKey == null) continue;
+                    foreach (var pidKeyName in vidKey.GetSubKeyNames())
+                    {
+                        using var pidKey = vidKey.OpenSubKey(pidKeyName);
+                        var deviceDesc = pidKey?.GetValue("DeviceDesc")?.ToString();
+                        if (!string.IsNullOrEmpty(deviceDesc))
+                        {
+                            usbDevices.Add($"{vidKeyName}/{pidKeyName}: {deviceDesc}");
+                        }
+                    }
+                }
+            }
+
+            var scannerDevices = usbDevices.Where(d =>
+                d.Contains("FUJITSU", StringComparison.OrdinalIgnoreCase) ||
+                d.Contains("fi-", StringComparison.OrdinalIgnoreCase) ||
+                d.Contains("scanner", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (scannerDevices.Count > 0)
+            {
+                item.Status = "PASS";
+                item.Message = "Scanner USB device found";
+                item.Details = string.Join("\n", scannerDevices);
+            }
+            else
+            {
+                item.Status = "WARN";
+                item.Message = "No FUJITSU scanner in USB devices";
+                item.Details = usbDevices.Count > 0 ? $"USB devices: {usbDevices.Count}" : "No USB devices found";
+                item.Suggestion = "1. Check USB cable connection\n2. Try different USB port\n3. Restart scanner and PC";
+            }
+        }
+        catch (Exception ex)
+        {
+            item.Status = "WARN";
+            item.Message = "Error checking USB connection";
+            item.Details = ex.Message;
+        }
+        return item;
+    }
+
     public ScanSession? SelectScanner(string scannerName)
     {
         lock (_lockObject)

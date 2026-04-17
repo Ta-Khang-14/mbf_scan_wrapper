@@ -1,7 +1,7 @@
 [Setup]
 ; Tên ứng dụng
 AppName=MBF Scan Service
-AppVersion=1.0.4
+AppVersion=1.0.7
 AppPublisher=MBF
 DefaultDirName={userpf}\MBFScanService
 DefaultGroupName=MBF Scan Service

@@ -204,3 +204,20 @@ public class PageSelection
     public int Index { get; set; }
     public bool IsOCR { get; set; } = false;
 }
+
+public class DiagnosticResult
+{
+    public bool Success { get; set; }
+    public string Summary { get; set; } = string.Empty;
+    public List<DiagnosticItem> Items { get; set; } = new();
+}
+
+public class DiagnosticItem
+{
+    public string Category { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string? Details { get; set; }
+    public string Suggestion { get; set; } = string.Empty;
+}

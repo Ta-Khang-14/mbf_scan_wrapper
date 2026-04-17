@@ -75,7 +75,62 @@ Lấy danh sách máy scan khả dụng.
 
 ---
 
-### 2.2 Scan - Quét Tài Liệu
+### 2.2 Diagnostic - Kiểm Tra Scanner
+
+Chạy kiểm tra toàn diện để xác định vấn đề scanner (driver, registry, USB, TWAIN source).
+
+|| | |
+|---|---|
+| **Method** | `GET` |
+| **URL** | `/api/scanner/diagnostic` |
+| **Auth** | Không |
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Passed: 5, Failed: 1, Warnings: 1",
+  "data": {
+    "success": false,
+    "summary": "Passed: 5, Failed: 1, Warnings: 1",
+    "items": [
+      {
+        "category": "TWAIN DSM",
+        "name": "TWAIN DSM Library",
+        "status": "PASS",
+        "message": "TWAIN DSM library found",
+        "details": "TWAIN_32.DLL: exists, TWAIN.DLL: exists",
+        "suggestion": ""
+      },
+      {
+        "category": "Driver",
+        "name": "FUJITSU USB Driver",
+        "status": "PASS",
+        "message": "FUJITSU driver registry found",
+        "details": "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\FUJITSU",
+        "suggestion": ""
+      },
+      {
+        "category": "Registry",
+        "name": "FUJITSU TWAIN Source",
+        "status": "FAIL",
+        "message": "FUJITSU TWAIN source not registered",
+        "details": "",
+        "suggestion": "Reinstall PaperStream IP (TWAIN) driver completely"
+      }
+    ]
+  }
+}
+```
+
+**Status Values:**
+- `PASS` - Kiểm tra thành công
+- `FAIL` - Kiểm tra thất bại (cần khắc phục)
+- `WARN` - Cảnh báo (có thể ảnh hưởng)
+
+---
+
+### 2.3 Scan - Quét Tài Liệu
 
 Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 
@@ -131,7 +186,7 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 
 ---
 
-### 2.3 Detect Files - Detect Barcode + Group Pages
+### 2.4 Detect Files - Detect Barcode + Group Pages
 
 Detect barcode trên các pages đã quét, nhóm pages thành documents và files, trả về danh sách documents/files với thông tin chi tiết từng page.
 
@@ -258,7 +313,7 @@ Detect barcode trên các pages đã quét, nhóm pages thành documents và fil
 
 ---
 
-### 2.4 Get Page Preview - Xem Preview Page
+### 2.5 Get Page Preview - Xem Preview Page
 
 Lấy hình ảnh của 1 page để xem trước.
 
@@ -282,7 +337,7 @@ Lấy hình ảnh của 1 page để xem trước.
 
 ---
 
-### 2.5 Get Page PDF - Lấy PDF Của 1 Page
+### 2.6 Get Page PDF - Lấy PDF Của 1 Page
 
 Chuyển đổi 1 page thành PDF để xem trước.
 
@@ -306,7 +361,7 @@ Chuyển đổi 1 page thành PDF để xem trước.
 
 ---
 
-### 2.6 Delete Page - Xóa Page
+### 2.7 Delete Page - Xóa Page
 
 Xóa 1 page khỏi session.
 
@@ -340,7 +395,7 @@ Xóa 1 page khỏi session.
 
 ---
 
-### 2.7 Process Scan - Xử Lý Scan
+### 2.8 Process Scan - Xử Lý Scan
 
 Tạo PDF, OCR và ký số (tùy chọn) theo danh sách documents/files từ client.
 
@@ -588,7 +643,7 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
 
 ---
 
-### 2.8 Get All Stored Files - Danh Sách File Đã Lưu
+### 2.9 Get All Stored Files - Danh Sách File Đã Lưu
 
 Lấy danh sách tất cả file PDF đã được tạo.
 
@@ -600,7 +655,7 @@ Lấy danh sách tất cả file PDF đã được tạo.
 
 ---
 
-### 2.9 Get File - Xem File PDF
+### 2.10 Get File - Xem File PDF
 
 Lấy file PDF để hiển thị inline.
 
@@ -612,7 +667,7 @@ Lấy file PDF để hiển thị inline.
 
 ---
 
-### 2.10 Delete File - Xóa File
+### 2.11 Delete File - Xóa File
 
 Xóa file PDF đã lưu.
 
