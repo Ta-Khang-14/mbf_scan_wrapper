@@ -100,6 +100,21 @@
     <None Update="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Update="DemoSource\page_ed4c2e92299b4175b328daf629ac8e11_0000.tif">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="DemoSource\page_ed4c2e92299b4175b328daf629ac8e11_0001.tif">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="DemoSource\page_ed4c2e92299b4175b328daf629ac8e11_0002.tif">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="DemoSource\page_ed4c2e92299b4175b328daf629ac8e11_0003.tif">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="DemoSource\page_ed4c2e92299b4175b328daf629ac8e11_0004.tif">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

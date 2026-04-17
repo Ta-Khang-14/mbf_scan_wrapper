@@ -146,6 +146,18 @@ public class ProcessFileResponse
     public long FileSize { get; set; }
     public string? OCRResult { get; set; }
     public DateTime CreatedAt { get; set; }
+    public ProcessFileSignInfo? SignInfo { get; set; }
+}
+
+public class ProcessFileSignInfo
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public string? FileName { get; set; }
+    public string? FilePath { get; set; }
+    public string? FileServer { get; set; }
+    public string? FolderKey { get; set; }
+    public string? Description { get; set; }
 }
 
 public class GetPagesRequest

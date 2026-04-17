@@ -22,6 +22,11 @@ public static class ScanController
     private static CleanupService? _cleanupService;
     private static SignService? _signService;
 
+    // Demo services
+    private static DemoScanService? _demoScanService;
+    private static DemoSignService? _demoSignService;
+    private const bool DEMO_MODE = true; // Demo mode enabled
+
     public static void Initialize(
         ScannerService scannerService,
         BarcodeService barcodeService,
@@ -40,7 +45,12 @@ public static class ScanController
         _imageService = imageService;
         _cleanupService = cleanupService;
         _signService = signService;
-        Log.Information("ScanController initialized with services");
+
+        // Initialize demo services
+        _demoScanService = new DemoScanService();
+        _demoSignService = new DemoSignService();
+
+        Log.Information("ScanController initialized (Demo Mode: {DemoMode})", DEMO_MODE);
     }
 
     private static ScanSession? GetSessionFromRequest(HttpRequest request)
@@ -107,8 +117,8 @@ public static class ScanController
 
     public static IResult Scan(ScanRequest? request)
     {
-        Log.Information("API: Scan called with scanner: {Scanner}, sessionId: {SessionId}",
-            request?.ScannerName, request?.SessionId);
+        Log.Information("API: Scan called with scanner: {Scanner}, sessionId: {SessionId} [Demo Mode: {DemoMode}]",
+            request?.ScannerName, request?.SessionId, DEMO_MODE);
 
         if (string.IsNullOrWhiteSpace(request?.ScannerName))
         {
@@ -117,11 +127,6 @@ public static class ScanController
 
         try
         {
-            if (_scannerService == null)
-            {
-                return Results.BadRequest(ApiResponse.Fail("Scanner service not initialized", "SERVICE_NOT_READY"));
-            }
-
             ScanSession session;
             lock (_lockObject)
             {
@@ -142,14 +147,30 @@ public static class ScanController
                     };
                     _currentSession = session;
                     _sessions[session.SessionId] = session;
-                    _scannerService.SaveSession(session);
                     Log.Information("Created new session: {SessionId}", session.SessionId);
                 }
             }
 
-            _scannerService.SelectScanner(request?.ScannerName!);
-
-            var resultSession = _scannerService.ScanAsync(session);
+            if (DEMO_MODE)
+            {
+                // Demo Mode: Copy files from DemoSource folder
+                if (_demoScanService == null)
+                {
+                    return Results.BadRequest(ApiResponse.Fail("Demo scan service not initialized", "SERVICE_NOT_READY"));
+                }
+                _demoScanService.SaveSession(session);
+                session = _demoScanService.ScanDemo(session);
+            }
+            else
+            {
+                // Real Mode: Use actual scanner
+                if (_scannerService == null)
+                {
+                    return Results.BadRequest(ApiResponse.Fail("Scanner service not initialized", "SERVICE_NOT_READY"));
+                }
+                _scannerService.SelectScanner(request?.ScannerName!);
+                session = _scannerService.ScanAsync(session) ?? session;
+            }
 
             return Results.Ok(ApiResponse<ScanStatusResponse>.Ok(
                 new ScanStatusResponse
@@ -180,9 +201,9 @@ public static class ScanController
             return Results.Ok(ApiResponse<GetPagesResponse>.Ok(new GetPagesResponse()));
         }
 
-        if (_scannerService != null)
+        if (!DEMO_MODE && _scannerService != null)
         {
-            session.Pages = _scannerService.GetCurrentSession()?.Pages ?? new List<ScanPage>();
+            session.Pages = _scannerService.GetCurrentSession()?.Pages ?? session.Pages;
         }
 
         if (_barcodeService != null && session.Pages.Count > 0)
@@ -606,70 +627,95 @@ public static class ScanController
                     CreatedAt = scanFile.CreatedAt
                 };
 
-                if (signInfo != null && _signService != null)
+                if (signInfo != null)
                 {
-                    Log.Information("Starting sign process for file: {FileName}, SignType: {SignType}", fileName, signInfo.SignType);
-
-                    signInfo.FilePath = pdfPath;
-                    signInfo.FileName = scanFile.FileName;
-
-                    if (signInfo.SignType == 0 && string.IsNullOrEmpty(signInfo.FileBase64))
+                    if (DEMO_MODE)
                     {
-                        try
+                        // Demo Mode: Simulate sign response
+                        Log.Information("DemoSign: Simulating sign response for file: {FileName}", fileName);
+                        var demoSignResponse = _demoSignService?.SimulateSignResponse(scanFile.FileName);
+                        if (demoSignResponse != null && demoSignResponse.Success)
                         {
-                            var fileBytes = File.ReadAllBytes(pdfPath);
-                            signInfo.FileBase64 = Convert.ToBase64String(fileBytes);
-                        }
-                        catch (Exception ex)
-                        {
-                            Log.Warning(ex, "Failed to read file for Base64 encoding");
+                            // In demo mode, we keep the original PDF and add sign info to response
+                            fileResponse.SignInfo = new ProcessFileSignInfo
+                            {
+                                Success = true,
+                                Message = demoSignResponse.Message,
+                                FileName = demoSignResponse.FileName,
+                                FilePath = demoSignResponse.FilePath,
+                                FileServer = demoSignResponse.FileServer,
+                                FolderKey = demoSignResponse.FolderKey,
+                                Description = demoSignResponse.Description
+                            };
+                            Log.Information("DemoSign: Sign simulation completed for {FileName}", fileName);
                         }
                     }
-
-                    var signResult = _signService.SignAsync(signInfo, webToken, roleId, userId).GetAwaiter().GetResult();
-
-                    if (signResult.IsSuccess && !string.IsNullOrEmpty(signResult.SignedFilePath))
+                    else if (_signService != null)
                     {
-                        Log.Information("Sign successful for file: {FileName}. Downloading signed file...", fileName);
+                        // Real Mode: Use actual sign service
+                        Log.Information("Starting sign process for file: {FileName}, SignType: {SignType}", fileName, signInfo.SignType);
 
-                        var downloadResult = _signService.DownloadSignedFileAsync(
-                            signResult.SignedFilePath,
-                            scanFile.FileName,
-                            signResult.FolderKey ?? signInfo.FolderKey ?? string.Empty,
-                            webToken, roleId, userId
-                        ).GetAwaiter().GetResult();
+                        signInfo.FilePath = pdfPath;
+                        signInfo.FileName = scanFile.FileName;
 
-                        if (downloadResult.IsSuccess && !string.IsNullOrEmpty(downloadResult.LocalFilePath))
+                        if (signInfo.SignType == 0 && string.IsNullOrEmpty(signInfo.FileBase64))
                         {
-                            var signedMetadata = _fileService?.SaveSignedFile(downloadResult.LocalFilePath, scanFile.FileName);
-                            if (signedMetadata != null && signedMetadata.IsSuccess)
+                            try
                             {
-                                scanFile.FileId = signedMetadata.Id ?? scanFile.FileId;
-                                scanFile.FileName = signedMetadata.FileName ?? scanFile.FileName;
-                                scanFile.PDFPath = signedMetadata.FilePath;
-                                scanFile.DownloadUrl = $"{scheme}://{host}/api/files/{signedMetadata.Id}";
-                                scanFile.FileSize = signedMetadata.FileSize;
+                                var fileBytes = File.ReadAllBytes(pdfPath);
+                                signInfo.FileBase64 = Convert.ToBase64String(fileBytes);
+                            }
+                            catch (Exception ex)
+                            {
+                                Log.Warning(ex, "Failed to read file for Base64 encoding");
+                            }
+                        }
 
-                                fileResponse.FileId = scanFile.FileId;
-                                fileResponse.FileName = scanFile.FileName;
-                                fileResponse.DownloadUrl = scanFile.DownloadUrl;
-                                fileResponse.FileSize = scanFile.FileSize;
+                        var signResult = _signService.SignAsync(signInfo, webToken, roleId, userId).GetAwaiter().GetResult();
 
-                                Log.Information("Signed file saved and ready for download: {DownloadUrl}", scanFile.DownloadUrl);
+                        if (signResult.IsSuccess && !string.IsNullOrEmpty(signResult.SignedFilePath))
+                        {
+                            Log.Information("Sign successful for file: {FileName}. Downloading signed file...", fileName);
+
+                            var downloadResult = _signService.DownloadSignedFileAsync(
+                                signResult.SignedFilePath,
+                                scanFile.FileName,
+                                signResult.FolderKey ?? signInfo.FolderKey ?? string.Empty,
+                                webToken, roleId, userId
+                            ).GetAwaiter().GetResult();
+
+                            if (downloadResult.IsSuccess && !string.IsNullOrEmpty(downloadResult.LocalFilePath))
+                            {
+                                var signedMetadata = _fileService?.SaveSignedFile(downloadResult.LocalFilePath, scanFile.FileName);
+                                if (signedMetadata != null && signedMetadata.IsSuccess)
+                                {
+                                    scanFile.FileId = signedMetadata.Id ?? scanFile.FileId;
+                                    scanFile.FileName = signedMetadata.FileName ?? scanFile.FileName;
+                                    scanFile.PDFPath = signedMetadata.FilePath;
+                                    scanFile.DownloadUrl = $"{scheme}://{host}/api/files/{signedMetadata.Id}";
+                                    scanFile.FileSize = signedMetadata.FileSize;
+
+                                    fileResponse.FileId = scanFile.FileId;
+                                    fileResponse.FileName = scanFile.FileName;
+                                    fileResponse.DownloadUrl = scanFile.DownloadUrl;
+                                    fileResponse.FileSize = scanFile.FileSize;
+
+                                    Log.Information("Signed file saved and ready for download: {DownloadUrl}", scanFile.DownloadUrl);
+                                }
+                                else
+                                {
+                                    Log.Warning("Failed to save signed file: {Error}", signedMetadata?.Error);
+                                }
                             }
                             else
                             {
-                                Log.Warning("Failed to save signed file: {Error}", signedMetadata?.Error);
+                                Log.Warning("Failed to download signed file: {Error}", downloadResult.ErrorMessage);
                             }
                         }
                         else
                         {
-                            Log.Warning("Failed to download signed file: {Error}", downloadResult.ErrorMessage);
+                            Log.Warning("Sign failed for file: {FileName}, Error: {Error}", fileName, signResult.ErrorMessage);
                         }
-                    }
-                    else
-                    {
-                        Log.Warning("Sign failed for file: {FileName}, Error: {Error}", fileName, signResult.ErrorMessage);
                     }
                 }
 
