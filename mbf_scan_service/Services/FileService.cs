@@ -238,6 +238,46 @@ public class FileService
             Log.Error(ex, "Error clearing files");
         }
     }
+
+    public FileMetadata SaveSignedFile(string sourcePath, string? fileName = null)
+    {
+        if (!File.Exists(sourcePath))
+        {
+            Log.Warning("Signed file not found: {Path}", sourcePath);
+            return new FileMetadata { Error = "File not found" };
+        }
+
+        try
+        {
+            var id = Guid.NewGuid().ToString("N")[..12];
+            var finalFileName = fileName ?? $"signed_{id}.pdf";
+            var destinationPath = Path.Combine(_outputFolder, finalFileName);
+
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+
+            var metadata = new FileMetadata
+            {
+                Id = id,
+                FileName = finalFileName,
+                FilePath = destinationPath,
+                DownloadUrl = $"{_downloadBasePath}/{id}",
+                FileSize = new FileInfo(destinationPath).Length,
+                CreatedAt = DateTime.Now
+            };
+
+            _files[id] = metadata;
+
+            Log.Information("Signed file saved: {FileName}, Size: {Size}, URL: {Url}",
+                finalFileName, metadata.FormattedFileSize, metadata.DownloadUrl);
+
+            return metadata;
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "Error saving signed file: {Path}", sourcePath);
+            return new FileMetadata { Error = ex.Message };
+        }
+    }
 }
 
 public class FileMetadata

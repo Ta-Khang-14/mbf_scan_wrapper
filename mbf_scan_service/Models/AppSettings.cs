@@ -31,4 +31,6 @@ public class SignConfig
     public string UrlApi { get; set; } = "";
     public string UrlSignTokenPdf { get; set; } = "";
     public string UrlUploadPath { get; set; } = "";
+    public string UrlViewFile { get; set; } = "";
+    public string SignedFolder { get; set; } = "signed";
 }

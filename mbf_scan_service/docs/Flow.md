@@ -237,16 +237,47 @@ Sau khi tạo PDF, có thể thực hiện ký số trên file PDF.
   2. Backend tạo PDF bình thường
   3. Nếu có SignInfo → Gọi SignService để ký số
   4. SignService xử lý ký token hoặc ký SIM
-  5. Backend cập nhật signedFileUrl = filePath đã ký + URL_API
-  6. Trả response về cho FE
+  5. Backend gọi API ViewFile để tải file đã ký về
+  6. Backend lưu file đã ký vào folder Signed
+  7. Backend build lại downloadUrl mới trả về cho FE
+  8. KHÔNG trả về signedFileUrl, signedFilePath, signSuccess nữa
 ```
 
 ### Hai Phương Thức Ký
 
 | Phương thức | SignType | Mô tả |
 |-------------|----------|--------|
-| Ký Token | 0 | Hash file → gọi API ký → trả về signedFileUrl |
-| Ký SIM | 1 | Upload file trước → gọi API ký SIM → trả về signedFileUrl |
+| Ký Token | 0 | Hash file → gọi API ký → download file ký về → lưu vào Signed folder |
+| Ký SIM | 1 | Upload file trước → gọi API ký SIM → download file ký về → lưu vào Signed folder |
+
+### Luồng Chi Tiết Sau Ký Thành Công
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    SAU KHI KÝ THÀNH CÔNG                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+  1. SignService trả về SignResult với:
+     - SignedFilePath: đường dẫn file đã ký trên server
+     - FolderKey: folder key của file
+
+  2. Backend gọi API ViewFile:
+     POST https://api-qlvb.niq.vn/apiservice/file/ViewFile
+     Headers:
+       - Authorization: Bearer <token>
+       - roleid, userid, origin, referer
+     Body:
+       {
+         "filePath": "/Contents/1/2026/04/17/doc_1_Signed_xxx.pdf",
+         "fileName": "20250919_VB_DEN_3935_signed.pdf",
+         "folderKey": "F2"
+       }
+
+  3. Backend lưu file nhận được vào folder "signed"
+
+  4. Backend tạo downloadUrl mới và trả về cho FE:
+     http://localhost:5000/api/files/<new-file-id>
+```
 
 ### Headers Bắt Buộc (Ký Số)
 

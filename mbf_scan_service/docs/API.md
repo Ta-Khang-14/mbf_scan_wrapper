@@ -595,10 +595,7 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
             "totalPages": 2,
             "fileSize": 1024000,
             "ocrResult": "Nội dung văn bản được OCR...",
-            "createdAt": "2026-04-13T10:58:00",
-            "signedFileUrl": "https://api.example.com/signed/folder-123/12345678_signed.pdf",
-            "signedFilePath": "/signed/folder-123/12345678_signed.pdf",
-            "signSuccess": true
+            "createdAt": "2026-04-13T10:58:00"
           },
           {
             "docIndex": 0,
@@ -634,12 +631,14 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
 }
 ```
 
-**Response Fields (Sign):**
-| Field | Type | Description |
-|-------|------|-------------|
-| `signedFileUrl` | string? | URL file đã ký (null nếu không ký số) |
-| `signedFilePath` | string? | Server path của file đã ký |
-| `signSuccess` | bool | Trạng thái ký số (false nếu không ký) |
+**Ghi chú về Ký Số:**
+- Nếu file có `signInfo` trong request và ký thành công:
+  - File gốc sẽ được thay thế bằng file đã ký
+  - `downloadUrl` sẽ trỏ đến file đã ký (đã download về từ server)
+  - Không còn trả về `signedFileUrl`, `signedFilePath`, `signSuccess`
+- Nếu ký thất bại:
+  - File gốc vẫn được giữ nguyên
+  - `downloadUrl` vẫn trỏ đến file gốc
 
 ---
 

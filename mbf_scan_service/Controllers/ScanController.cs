@@ -603,8 +603,7 @@ public static class ScanController
                     TotalPages = scanFile.Pages.Count,
                     FileSize = scanFile.FileSize,
                     OCRResult = scanFile.OCRResult,
-                    CreatedAt = scanFile.CreatedAt,
-                    SignSuccess = false
+                    CreatedAt = scanFile.CreatedAt
                 };
 
                 if (signInfo != null && _signService != null)
@@ -629,16 +628,47 @@ public static class ScanController
 
                     var signResult = _signService.SignAsync(signInfo, webToken, roleId, userId).GetAwaiter().GetResult();
 
-                    if (signResult.IsSuccess)
+                    if (signResult.IsSuccess && !string.IsNullOrEmpty(signResult.SignedFilePath))
                     {
-                        fileResponse.SignedFileUrl = signResult.SignedFileUrl;
-                        fileResponse.SignedFilePath = signResult.SignedFilePath;
-                        fileResponse.SignSuccess = true;
-                        Log.Information("Sign successful for file: {FileName}, SignedUrl: {SignedUrl}", fileName, signResult.SignedFileUrl);
+                        Log.Information("Sign successful for file: {FileName}. Downloading signed file...", fileName);
+
+                        var downloadResult = _signService.DownloadSignedFileAsync(
+                            signResult.SignedFilePath,
+                            scanFile.FileName,
+                            signResult.FolderKey ?? signInfo.FolderKey ?? string.Empty,
+                            webToken, roleId, userId
+                        ).GetAwaiter().GetResult();
+
+                        if (downloadResult.IsSuccess && !string.IsNullOrEmpty(downloadResult.LocalFilePath))
+                        {
+                            var signedMetadata = _fileService?.SaveSignedFile(downloadResult.LocalFilePath, scanFile.FileName);
+                            if (signedMetadata != null && signedMetadata.IsSuccess)
+                            {
+                                scanFile.FileId = signedMetadata.Id ?? scanFile.FileId;
+                                scanFile.FileName = signedMetadata.FileName ?? scanFile.FileName;
+                                scanFile.PDFPath = signedMetadata.FilePath;
+                                scanFile.DownloadUrl = $"{scheme}://{host}/api/files/{signedMetadata.Id}";
+                                scanFile.FileSize = signedMetadata.FileSize;
+
+                                fileResponse.FileId = scanFile.FileId;
+                                fileResponse.FileName = scanFile.FileName;
+                                fileResponse.DownloadUrl = scanFile.DownloadUrl;
+                                fileResponse.FileSize = scanFile.FileSize;
+
+                                Log.Information("Signed file saved and ready for download: {DownloadUrl}", scanFile.DownloadUrl);
+                            }
+                            else
+                            {
+                                Log.Warning("Failed to save signed file: {Error}", signedMetadata?.Error);
+                            }
+                        }
+                        else
+                        {
+                            Log.Warning("Failed to download signed file: {Error}", downloadResult.ErrorMessage);
+                        }
                     }
                     else
                     {
-                        fileResponse.SignSuccess = false;
                         Log.Warning("Sign failed for file: {FileName}, Error: {Error}", fileName, signResult.ErrorMessage);
                     }
                 }

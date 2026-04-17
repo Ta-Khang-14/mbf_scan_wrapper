@@ -183,8 +183,8 @@ public class SignService
         return new SignResult
         {
             IsSuccess = true,
-            SignedFileUrl = downloadUrl,
-            SignedFilePath = filePath
+            SignedFilePath = filePath,
+            FolderKey = folderKey
         };
     }
 
@@ -253,8 +253,8 @@ public class SignService
         return new SignResult
         {
             IsSuccess = true,
-            SignedFileUrl = downloadUrl,
-            SignedFilePath = signResponse.Data.FilePath
+            SignedFilePath = signResponse.Data.FilePath,
+            FolderKey = signInfo.FolderKey
         };
     }
 
@@ -349,5 +349,73 @@ public class SignService
     {
         _folderKeyCache.Clear();
         _logger.Information("FolderKey cache cleared");
+    }
+
+    public async Task<DownloadResult> DownloadSignedFileAsync(string signedFilePath, string fileName, string folderKey, string? webToken, string? roleId, string? userId)
+    {
+        try
+        {
+            var cred = new ApiCredentials(webToken, roleId, userId);
+            var url = _config.UrlViewFile.TrimEnd('/');
+
+            var request = new ViewFileRequest
+            {
+                FilePath = signedFilePath,
+                FileName = fileName,
+                FolderKey = folderKey
+            };
+
+            var httpContent = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
+            var httpRequest = CreateRequest(HttpMethod.Post, url, httpContent);
+            AddAuthHeaders(httpRequest, cred);
+            httpRequest.Headers.Add("origin", "https://qlvb.mbfs.dev");
+            httpRequest.Headers.Add("referer", "https://qlvb.mbfs.dev/");
+            httpRequest.Headers.Add("accept", "application/json");
+            httpRequest.Headers.Add("accept-language", "vi");
+
+            _logger.Information("Calling ViewFile API to download signed file: {Url}, FilePath: {FilePath}", url, signedFilePath);
+
+            var response = await _httpClient.SendAsync(httpRequest);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                _logger.Warning("ViewFile API returned non-success: {StatusCode}, Body: {Body}", response.StatusCode, body);
+                return new DownloadResult { IsSuccess = false, ErrorMessage = $"ViewFile API error: {response.StatusCode}" };
+            }
+
+            var contentType = response.Content.Headers.ContentType?.MediaType;
+            _logger.Information("ViewFile response ContentType: {ContentType}", contentType);
+
+            var signedFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, _config.SignedFolder);
+            if (!Directory.Exists(signedFolder))
+            {
+                Directory.CreateDirectory(signedFolder);
+            }
+
+            var extension = Path.GetExtension(fileName);
+            if (string.IsNullOrEmpty(extension))
+            {
+                extension = ".pdf";
+            }
+            var uniqueFileName = $"{Path.GetFileNameWithoutExtension(fileName)}_{DateTime.Now:yyyyMMddHHmmss}{extension}";
+            var localPath = Path.Combine(signedFolder, uniqueFileName);
+
+            await using var fs = new FileStream(localPath, FileMode.Create, FileAccess.Write);
+            await response.Content.CopyToAsync(fs);
+
+            _logger.Information("Signed file downloaded successfully: {LocalPath}", localPath);
+
+            return new DownloadResult
+            {
+                IsSuccess = true,
+                LocalFilePath = localPath
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.Error(ex, "Error downloading signed file: {FilePath}", signedFilePath);
+            return new DownloadResult { IsSuccess = false, ErrorMessage = ex.Message };
+        }
     }
 }

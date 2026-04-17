@@ -146,9 +146,6 @@ public class ProcessFileResponse
     public long FileSize { get; set; }
     public string? OCRResult { get; set; }
     public DateTime CreatedAt { get; set; }
-    public string? SignedFileUrl { get; set; }
-    public string? SignedFilePath { get; set; }
-    public bool SignSuccess { get; set; }
 }
 
 public class GetPagesRequest

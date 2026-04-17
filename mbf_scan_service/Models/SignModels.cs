@@ -98,7 +98,29 @@ public class FolderKeyResponse
 public class SignResult
 {
     public bool IsSuccess { get; set; }
-    public string? SignedFileUrl { get; set; }
     public string? SignedFilePath { get; set; }
+    public string? FolderKey { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+public class ViewFileRequest
+{
+    public string FilePath { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string FolderKey { get; set; } = string.Empty;
+}
+
+public class ViewFileResponse
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public string? Data { get; set; }
+}
+
+public class DownloadResult
+{
+    public bool IsSuccess { get; set; }
+    public string? LocalFilePath { get; set; }
+    public string? DownloadUrl { get; set; }
     public string? ErrorMessage { get; set; }
 }
