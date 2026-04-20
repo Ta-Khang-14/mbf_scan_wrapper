@@ -1,7 +1,7 @@
 [Setup]
 ; Tên ứng dụng
 AppName=MBF Scan Service Demo
-AppVersion=1.0.2
+AppVersion=1.0.4
 AppPublisher=MBF
 DefaultDirName={userpf}\MBFScanServiceDemo
 DefaultGroupName=MBF Scan Service Demo

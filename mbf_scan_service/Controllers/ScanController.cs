@@ -25,7 +25,7 @@ public static class ScanController
     // Demo services
     private static DemoScanService? _demoScanService;
     private static DemoSignService? _demoSignService;
-    private const bool DEMO_MODE = false; // Demo mode enabled
+    private const bool DEMO_MODE = true; // Demo mode enabled
 
     public static void Initialize(
         ScannerService scannerService,
