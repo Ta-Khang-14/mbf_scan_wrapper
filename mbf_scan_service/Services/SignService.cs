@@ -368,8 +368,6 @@ public class SignService
             var httpContent = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
             var httpRequest = CreateRequest(HttpMethod.Post, url, httpContent);
             AddAuthHeaders(httpRequest, cred);
-            httpRequest.Headers.Add("origin", "https://qlvb.mbfs.dev");
-            httpRequest.Headers.Add("referer", "https://qlvb.mbfs.dev/");
             httpRequest.Headers.Add("accept", "application/json");
             httpRequest.Headers.Add("accept-language", "vi");
 

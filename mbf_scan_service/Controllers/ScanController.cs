@@ -25,7 +25,7 @@ public static class ScanController
     // Demo services
     private static DemoScanService? _demoScanService;
     private static DemoSignService? _demoSignService;
-    private const bool DEMO_MODE = true; // Demo mode enabled
+    private const bool DEMO_MODE = false; // Demo mode enabled
 
     public static void Initialize(
         ScannerService scannerService,
@@ -631,12 +631,51 @@ public static class ScanController
                 {
                     if (DEMO_MODE)
                     {
-                        // Demo Mode: Simulate sign response
-                        Log.Information("DemoSign: Simulating sign response for file: {FileName}", fileName);
+                        // Demo Mode: Simulate sign response, then download real file from server
+                        Log.Information("DemoSign: Simulating sign for file: {FileName}", fileName);
+
+                        signInfo.FilePath = pdfPath;
+                        signInfo.FileName = scanFile.FileName;
+
                         var demoSignResponse = _demoSignService?.SimulateSignResponse(scanFile.FileName);
-                        if (demoSignResponse != null && demoSignResponse.Success)
+                        if (demoSignResponse != null && demoSignResponse.Success && _signService != null)
                         {
-                            // In demo mode, we keep the original PDF and add sign info to response
+                            // Download real signed file from server using mock filePath and folderKey
+                            var downloadResult = _signService.DownloadSignedFileAsync(
+                                demoSignResponse.FilePath ?? string.Empty,
+                                scanFile.FileName,
+                                demoSignResponse.FolderKey ?? string.Empty,
+                                webToken, roleId, userId
+                            ).GetAwaiter().GetResult();
+
+                            if (downloadResult.IsSuccess && !string.IsNullOrEmpty(downloadResult.LocalFilePath))
+                            {
+                                var signedMetadata = _fileService?.SaveSignedFile(downloadResult.LocalFilePath, scanFile.FileName);
+                                if (signedMetadata != null && signedMetadata.IsSuccess)
+                                {
+                                    scanFile.FileId = signedMetadata.Id ?? scanFile.FileId;
+                                    scanFile.FileName = signedMetadata.FileName ?? scanFile.FileName;
+                                    scanFile.PDFPath = signedMetadata.FilePath;
+                                    scanFile.DownloadUrl = $"{scheme}://{host}/api/files/{signedMetadata.Id}";
+                                    scanFile.FileSize = signedMetadata.FileSize;
+
+                                    fileResponse.FileId = scanFile.FileId;
+                                    fileResponse.FileName = scanFile.FileName;
+                                    fileResponse.DownloadUrl = scanFile.DownloadUrl;
+                                    fileResponse.FileSize = scanFile.FileSize;
+
+                                    Log.Information("DemoSign: Signed file saved and ready for download: {DownloadUrl}", scanFile.DownloadUrl);
+                                }
+                                else
+                                {
+                                    Log.Warning("DemoSign: Failed to save signed file: {Error}", signedMetadata?.Error);
+                                }
+                            }
+                            else
+                            {
+                                Log.Warning("DemoSign: Failed to download signed file: {Error}", downloadResult.ErrorMessage);
+                            }
+
                             fileResponse.SignInfo = new ProcessFileSignInfo
                             {
                                 Success = true,
@@ -647,7 +686,6 @@ public static class ScanController
                                 FolderKey = demoSignResponse.FolderKey,
                                 Description = demoSignResponse.Description
                             };
-                            Log.Information("DemoSign: Sign simulation completed for {FileName}", fileName);
                         }
                     }
                     else if (_signService != null)
