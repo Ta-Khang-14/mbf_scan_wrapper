@@ -207,6 +207,10 @@ internal static class Program
             .WithName("TriggerCleanup")
             .WithTags("Maintenance");
 
+        apiGroup.MapPost("/document/extract-ocr", ScanController.ExtractOCR)
+            .WithName("ExtractOCR")
+            .WithTags("Document");
+
         apiGroup.MapGet("/maintenance/stats", ScanController.GetCleanupStats)
             .WithName("GetCleanupStats")
             .WithTags("Maintenance");

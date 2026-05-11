@@ -21,6 +21,7 @@ public static class ScanController
     private static ImageService? _imageService;
     private static CleanupService? _cleanupService;
     private static SignService? _signService;
+    private static DocumentExtractor? _documentExtractor;
 
     // Demo services
     private static DemoScanService? _demoScanService;
@@ -45,6 +46,7 @@ public static class ScanController
         _imageService = imageService;
         _cleanupService = cleanupService;
         _signService = signService;
+        _documentExtractor = new DocumentExtractor();
 
         // Initialize demo services
         _demoScanService = new DemoScanService();
@@ -593,24 +595,34 @@ public static class ScanController
         {
             var metadata = _fileService.SavePdf(pdfPath, fileName);
 
-            if (metadata.IsSuccess)
-            {
-                string? ocrText = null;
-                if (_ocrService != null && ocrPages.Count > 0)
+                if (metadata.IsSuccess)
                 {
-                    ocrText = _ocrService.PerformOCR(ocrPages.First().ImagePath);
-                }
+                    string? ocrText = null;
+                    DocumentMetadata? ocrExtract = null;
+                    if (_ocrService != null && ocrPages.Count > 0)
+                    {
+                        var ocrTexts = ocrPages
+                            .Select(p => _ocrService.PerformOCR(p.ImagePath))
+                            .Where(t => !string.IsNullOrWhiteSpace(t))
+                            .ToList();
+                        ocrText = string.Join("\n\n--- Page Break ---\n\n", ocrTexts);
+                        if (!string.IsNullOrWhiteSpace(ocrText) && _documentExtractor != null)
+                        {
+                            ocrExtract = _documentExtractor.Extract(ocrText);
+                        }
+                    }
 
-                var scanFile = new ScanFile(filePages)
-                {
-                    FileId = metadata.Id ?? fileId,
-                    FileName = metadata.FileName ?? fileName,
-                    PDFPath = pdfPath,
-                    DownloadUrl = $"{scheme}://{host}/api/files/{metadata.Id ?? fileId}",
-                    OCRResult = ocrText,
-                    FileSize = metadata.FileSize,
-                    CreatedAt = DateTime.Now
-                };
+                    var scanFile = new ScanFile(filePages)
+                    {
+                        FileId = metadata.Id ?? fileId,
+                        FileName = metadata.FileName ?? fileName,
+                        PDFPath = pdfPath,
+                        DownloadUrl = $"{scheme}://{host}/api/files/{metadata.Id ?? fileId}",
+                        OCRResult = ocrText,
+                        OCRExtract = ocrExtract,
+                        FileSize = metadata.FileSize,
+                        CreatedAt = DateTime.Now
+                    };
 
                 session.Files.Add(scanFile);
 
@@ -624,6 +636,7 @@ public static class ScanController
                     TotalPages = scanFile.Pages.Count,
                     FileSize = scanFile.FileSize,
                     OCRResult = scanFile.OCRResult,
+                    OCRExtract = scanFile.OCRExtract,
                     CreatedAt = scanFile.CreatedAt
                 };
 
@@ -761,6 +774,74 @@ public static class ScanController
             }
         }
         return null;
+    }
+
+    public static IResult ExtractOCR(HttpContext context)
+    {
+        Log.Information("API: ExtractOCR called");
+
+        ExtractOCRRequest? request = null;
+        if (context.Request.ContentLength > 0)
+        {
+            using var reader = new StreamReader(context.Request.Body);
+            var body = reader.ReadToEndAsync().GetAwaiter().GetResult();
+            request = JsonSerializer.Deserialize<ExtractOCRRequest>(body, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+
+        if (request == null)
+        {
+            return Results.BadRequest(ApiResponse.Fail("Request body is required", "INVALID_REQUEST"));
+        }
+
+        string? ocrText = request.OCRText;
+
+        if (string.IsNullOrWhiteSpace(ocrText))
+        {
+            if (!string.IsNullOrWhiteSpace(request.FileId) && _fileService != null)
+            {
+                var fileMetadata = _fileService.GetFileById(request.FileId);
+                if (fileMetadata == null || string.IsNullOrEmpty(fileMetadata.FilePath))
+                {
+                    return Results.NotFound(ApiResponse.Fail($"File not found: {request.FileId}", "FILE_NOT_FOUND"));
+                }
+
+                if (_ocrService == null)
+                {
+                    return Results.BadRequest(ApiResponse.Fail("OCR service not available", "SERVICE_NOT_READY"));
+                }
+
+                ocrText = _ocrService.PerformOCR(fileMetadata.FilePath);
+                if (string.IsNullOrWhiteSpace(ocrText))
+                {
+                    return Results.Ok(ApiResponse<ExtractOCRResponse>.Ok(
+                        new ExtractOCRResponse { FileId = request.FileId, Warning = "No text found in document" },
+                        "OCR produced no text"));
+                }
+            }
+            else
+            {
+                return Results.BadRequest(ApiResponse.Fail("Either OCRText or FileId is required", "INVALID_REQUEST"));
+            }
+        }
+
+        if (_documentExtractor == null)
+        {
+            return Results.BadRequest(ApiResponse.Fail("Document extractor not initialized", "SERVICE_NOT_READY"));
+        }
+
+        var metadata = _documentExtractor.Extract(ocrText);
+
+        Log.Information("ExtractOCR completed - DocType: {DocType}, Notation: {Notation}, PublishUnit: {PublishUnit}",
+            metadata.DocType, metadata.Notation, metadata.PublishUnit);
+
+        return Results.Ok(ApiResponse<ExtractOCRResponse>.Ok(
+            new ExtractOCRResponse
+            {
+                FileId = request.FileId,
+                Metadata = metadata,
+                Warning = metadata.IsNonStandard ? "Document is non-standard format" : null
+            },
+            "OCR extraction completed"));
     }
 
     public static IResult TriggerCleanup()
