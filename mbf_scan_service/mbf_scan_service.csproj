@@ -27,23 +27,7 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
-
-  <ItemGroup>
-    <None Remove="tessdata\eng.traineddata" />
-    <None Remove="tessdata\vie.traineddata" />
-    <None Remove="tessdata\vie_new.traineddata" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="tessdata\eng.traineddata">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="tessdata\vie.traineddata">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-    <Content Include="tessdata\vie_new.traineddata" />
-  </ItemGroup>
-
+	
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
@@ -131,6 +115,12 @@
     </None>
     <None Update="DemoSource\page_ed4c2e92299b4175b328daf629ac8e11_0004.tif">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="tessdata\eng.traineddata">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Update="tessdata\vie.traineddata">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
