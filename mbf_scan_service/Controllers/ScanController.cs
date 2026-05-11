@@ -407,7 +407,7 @@ public static class ScanController
                             .ToList();
 
                         var ocrPages = fileRequest.Pages
-                            .Where(p => false)
+                            .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
                             .Select(p => session.Pages[p.Index])
                             .ToList();
 
