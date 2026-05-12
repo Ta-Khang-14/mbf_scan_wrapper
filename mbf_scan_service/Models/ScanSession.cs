@@ -37,5 +37,5 @@ public class ScanSettings
     public int? DPI { get; set; }
     public string? ColorMode { get; set; }
     public string? PaperSize { get; set; }
-    // MaxPages và EnableDuplex chỉ thiết lập trên server, client không gửi được
+    public bool? EnableDuplex { get; set; }
 }

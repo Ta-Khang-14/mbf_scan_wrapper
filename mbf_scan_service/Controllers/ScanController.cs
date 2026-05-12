@@ -309,11 +309,12 @@ public static class ScanController
             return Results.BadRequest(ApiResponse.Fail($"Invalid page index: {index}", "INVALID_INDEX"));
         }
 
+        var pageToDelete = session.Pages[index];
         session.Pages.RemoveAt(index);
 
-        if (!string.IsNullOrEmpty(session.Pages[index > 0 ? index - 1 : 0].ImagePath))
+        if (session.Pages.Count > 0 && !string.IsNullOrEmpty(pageToDelete.ImagePath))
         {
-            _imageService?.InvalidateCache(session.Pages[index > 0 ? index - 1 : 0].ImagePath);
+            _imageService?.InvalidateCache(pageToDelete.ImagePath);
         }
 
         for (int i = 0; i < session.Pages.Count; i++)

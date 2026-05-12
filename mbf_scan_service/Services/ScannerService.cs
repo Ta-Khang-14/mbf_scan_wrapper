@@ -824,9 +824,11 @@ public class ScannerService : IDisposable
             }
 
             // --- Cấu hình duplex ---
+            bool? enableDuplex = session.Settings?.EnableDuplex;
+            bool useDuplex = enableDuplex ?? _enableDuplex;
             try
             {
-                if (_enableDuplex == true)
+                if (useDuplex == true)
                 {
                     ds.Capabilities.CapDuplexEnabled.SetValue(BoolType.True);
                     Log.Information("Enabled duplex scanning");
@@ -838,7 +840,7 @@ public class ScannerService : IDisposable
             }
 
             Log.Information("Scanner configured: DPI={DPI}, ColorMode={ColorMode}, Duplex={Duplex}",
-                dpi, colorMode, _enableDuplex);
+                dpi, colorMode, useDuplex);
         }
         catch (Exception ex)
         {

@@ -53,7 +53,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"scannerName\": \"FUJITSU fi-760\",\n  \"settings\": {\n    \"dpi\": 300,\n    \"colorMode\": \"Color\",\n    \"paperSize\": \"A4\"\n  }\n}"
+							"raw": "{\n  \"scannerName\": \"FUJITSU fi-760\",\n  \"settings\": {\n    \"dpi\": 300,\n    \"colorMode\": \"Color\",\n    \"paperSize\": \"A4\",\n    \"enableDuplex\": true\n  }\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/scanner/scan",
@@ -183,7 +183,7 @@
 							"host": ["{{baseUrl}}"],
 							"path": ["api", "scanner", "process"]
 						},
-						"description": "Tạo PDF, OCR và ký số (tùy chọn).\n\nHeaders bắt buộc cho ký số:\n- X-Web-Token: Web token authentication\n- X-Role-Id: Role ID của user\n- X-User-Id: User ID của user\n\nSignType:\n- 0: Ký Token (không cần X-Role-Id, X-User-Id)\n- 1: Ký SIM (cần tất cả headers)\n\nResponse trả về thêm các fields:\n- signedFileUrl: URL file đã ký\n- signedFilePath: Server path của file đã ký\n- signSuccess: Trạng thái ký số"
+						"description": "Tạo PDF, OCR và ký số (tùy chọn).\n\nHeaders bắt buộc cho ký số:\n- X-Web-Token: Web token authentication\n- X-Role-Id: Role ID của user\n- X-User-Id: User ID của user\n\nSignType:\n- 0: Ký Token (không cần X-Role-Id, X-User-Id)\n- 1: Ký SIM (cần tất cả headers)\n\nOCR:\n- Nếu có page nào `isOCR: true`, file sẽ được OCR và trả về `ocrResult` + `ocrExtract`.\n- `ocrResult`: nội dung OCR thô, ghép nối tất cả các page có `isOCR: true` bằng separator `\\n\\n--- Page Break ---\\n\\n`\n- `ocrExtract`: dữ liệu trích xuất từ OCR (DocumentMetadata)\n\nOCRExtract fields:\n- docType, publishUnit, notation, publishDateStr, publishDate\n- abstract, number, receivedDate, recipientUnit\n- signerRole, signer, urgent, isNonStandard\n\nKý Số:\n- signInfo.success: trạng thái ký số\n- signedFileUrl: URL file đã ký (nếu thành công)"
 					},
 					"response": []
 				},
