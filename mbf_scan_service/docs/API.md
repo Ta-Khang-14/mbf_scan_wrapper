@@ -149,7 +149,8 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
   "settings": {
     "dpi": 300,
     "colorMode": "Color",
-    "paperSize": "A4"
+    "paperSize": "A4",
+    "enableDuplex": true
   }
 }
 ```
@@ -161,6 +162,7 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 | `settings.dpi` | number | ❌ | DPI quét (mặc định: 300) |
 | `settings.colorMode` | string | ❌ | Chế độ màu: `Color`, `BW`, `Gray` (mặc định: `Color`) |
 | `settings.paperSize` | string | ❌ | Khổ giấy: `A4`, `A3`, `Letter` (mặc định: `A4`) |
+| `settings.enableDuplex` | boolean | ❌ | Bật quét hai mặt (mặc định: `true` hoặc theo cấu hình server) |
 
 
 **Response:**
@@ -594,7 +596,22 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
             "downloadUrl": "http://localhost:5000/api/files/xyz78901",
             "totalPages": 2,
             "fileSize": 1024000,
-            "ocrResult": "Nội dung văn bản được OCR...",
+            "ocrResult": "Nội dung văn bản page 1...\n\n--- Page Break ---\n\nNội dung văn bản page 2...",
+            "ocrExtract": {
+              "docType": "Công văn",
+              "publishUnit": "Sở Tài Chính",
+              "notation": "1234/CV-STC",
+              "publishDateStr": "13/04/2026",
+              "publishDate": "2026-04-13",
+              "abstract": "V/v hướng dẫn quy trình...",
+              "number": "2026-001",
+              "receivedDate": "2026-04-14",
+              "recipientUnit": "Phòng Tài Vụ",
+              "signerRole": "Giám đốc",
+              "signer": "Nguyễn Văn A",
+              "urgent": "Khẩn",
+              "isNonStandard": false
+            },
             "createdAt": "2026-04-13T10:58:00"
           },
           {
@@ -605,7 +622,8 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
             "downloadUrl": "http://localhost:5000/api/files/abc12345",
             "totalPages": 2,
             "fileSize": 980000,
-            "ocrResult": "Nội dung văn bản được OCR...",
+            "ocrResult": null,
+            "ocrExtract": null,
             "createdAt": "2026-04-13T10:58:05"
           }
         ]
@@ -621,7 +639,22 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
             "downloadUrl": "http://localhost:5000/api/files/def67890",
             "totalPages": 2,
             "fileSize": 1050000,
-            "ocrResult": "Nội dung văn bản được OCR...",
+            "ocrResult": "Nội dung văn bản page 1...\n\n--- Page Break ---\n\nNội dung văn bản page 2...",
+            "ocrExtract": {
+              "docType": "Báo cáo",
+              "publishUnit": "Phòng Kế Hoạch",
+              "notation": "567/BC-PKH",
+              "publishDateStr": "15/04/2026",
+              "publishDate": "2026-04-15",
+              "abstract": "Báo cáo tình hình quý I...",
+              "number": "2026-002",
+              "receivedDate": "2026-04-16",
+              "recipientUnit": "Ban Giám đốc",
+              "signerRole": "Trưởng phòng",
+              "signer": "Trần Thị B",
+              "urgent": "Bình thường",
+              "isNonStandard": false
+            },
             "createdAt": "2026-04-13T10:58:10"
           }
         ]
@@ -639,6 +672,51 @@ Cả 2 loại ký (Token và SIM) đều trả về format chung `SignApiRespons
 - Nếu ký thất bại:
   - File gốc vẫn được giữ nguyên
   - `downloadUrl` vẫn trỏ đến file gốc
+
+**Ghi chú về OCR:**
+- `ocrResult`: Nội dung OCR thô của tất cả các page có `isOCR: true`, được ghép nối bằng separator `\n\n--- Page Break ---\n\n`
+- `ocrExtract`: Dữ liệu trích xuất từ OCR (DocumentMetadata). Nếu file không có page nào `isOCR: true`, cả `ocrResult` và `ocrExtract` đều là `null`.
+- `ocrExtract.isNonStandard`: `true` = mẫu không tiêu chuẩn (công văn đến, giấy tờ nội bộ), `false` = mẫu tiêu chuẩn VB95 (có tiêu đề quốc hiệu và số ký hiệu)
+
+---
+
+### OCRExtract Object (DocumentMetadata)
+
+Trả về trong response của `/api/scanner/process` tại `data.documents[].files[].ocrExtract`.
+
+```json
+{
+  "docType": "Công văn",
+  "publishUnit": "Sở Tài Chính",
+  "notation": "1234/CV-STC",
+  "publishDateStr": "13/04/2026",
+  "publishDate": "2026-04-13",
+  "abstract": "V/v hướng dẫn quy trình...",
+  "number": "2026-001",
+  "receivedDate": "2026-04-14",
+  "recipientUnit": "Phòng Tài Vụ",
+  "signerRole": "Giám đốc",
+  "signer": "Nguyễn Văn A",
+  "urgent": "Khẩn",
+  "isNonStandard": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `docType` | string | Loại văn bản (Công văn, Báo cáo, Quyết định...) |
+| `publishUnit` | string | Đơn vị ban hành / Nơi gửi |
+| `notation` | string | Số ký hiệu văn bản (VD: 1234/CV-STC) |
+| `publishDateStr` | string | Ngày ban hành (định dạng dd/MM/yyyy) |
+| `publishDate` | string | Ngày ban hành (định dạng yyyy-MM-dd) |
+| `abstract` | string | Trích yếu nội dung văn bản |
+| `number` | string | Số đến (số công văn đến) |
+| `receivedDate` | string | Ngày đến (yyyy-MM-dd) |
+| `recipientUnit` | string | Đơn vị nhận / Nơi nhận |
+| `signerRole` | string | Chức vụ người ký |
+| `signer` | string | Tên người ký |
+| `urgent` | string | Độ khẩn: `Bình thường`, `Khẩn`, `Hỏi`, `Thượng khẩn` |
+| `isNonStandard` | boolean | `true` = mẫu không tiêu chuẩn, `false` = mẫu tiêu chuẩn VB95 |
 
 ---
 

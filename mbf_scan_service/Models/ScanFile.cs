@@ -7,6 +7,8 @@ public class ScanFile
     public string PDFPath { get; set; } = string.Empty;
     public string? DownloadUrl { get; set; }
     public string? OCRResult { get; set; }
+    public DocumentMetadata? OCRExtract { get; set; }
+    public DocumentMetadata? ExtractedMetadata { get; set; }
     public List<ScanPage> Pages { get; set; } = new();
     public int TotalPages => Pages.Count;
     public DateTime CreatedAt { get; set; }

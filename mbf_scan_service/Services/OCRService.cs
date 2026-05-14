@@ -7,7 +7,9 @@ public class OCRService : IDisposable
 {
     private readonly string _tessdataPath;
     private readonly string[] _languages;
+    private readonly string[] _effectiveLanguages;
     private TesseractEngine? _engine;
+    private readonly EngineMode _engineMode;
 
     private static readonly string[] DefaultLanguages = { "eng", "vie" };
 
@@ -21,9 +23,10 @@ public class OCRService : IDisposable
         _tessdataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
 
         EnsureTessdataExists();
-        InitializeEngine();
+        (_effectiveLanguages, _engineMode) = InitializeEngine();
 
-        Log.Information("OCRService initialized with languages: {Languages}", string.Join("+", _languages));
+        Log.Information("OCRService initialized with languages: {Languages}, mode: {Mode}",
+            string.Join("+", _effectiveLanguages), _engineMode);
     }
 
     private void EnsureTessdataExists()
@@ -35,34 +38,103 @@ public class OCRService : IDisposable
         }
 
         var missingFiles = new List<string>();
+
         foreach (var lang in _languages)
         {
             var trainedDataPath = Path.Combine(_tessdataPath, $"{lang}.traineddata");
-            if (!File.Exists(trainedDataPath))
+            var bestTrainedDataPath = Path.Combine(_tessdataPath, $"{lang}_best.traineddata");
+
+            if (!File.Exists(trainedDataPath) && !File.Exists(bestTrainedDataPath))
             {
                 missingFiles.Add(lang);
+            }
+            else if (File.Exists(bestTrainedDataPath) && !File.Exists(trainedDataPath))
+            {
+                Log.Information("Found best traineddata for {Lang}: {Path} (recommended for better accuracy)", lang, bestTrainedDataPath);
+            }
+            else if (File.Exists(bestTrainedDataPath))
+            {
+                Log.Information("Found best traineddata for {Lang}: {Path} (better accuracy than standard)", lang, bestTrainedDataPath);
             }
         }
 
         if (missingFiles.Count > 0)
         {
             Log.Warning("Missing tessdata files for languages: {Missing}", string.Join(", ", missingFiles));
-            Log.Warning("Please download traineddata files from: https://github.com/tesseract-ocr/tessdata");
+            Log.Warning("Please download traineddata files from: https://github.com/tesseract-ocr/tessdata (standard) or https://github.com/tesseract-ocr/tessdata_best (best quality)");
+            Log.Information("For Vietnamese documents, downloading vie_best.traineddata from tessdata_best is recommended for improved OCR accuracy");
+        }
+        else
+        {
+            var hasBest = Directory.GetFiles(_tessdataPath, "*_best.traineddata").Length > 0;
+            if (hasBest)
+            {
+                Log.Information("OCR is configured to use LSTM mode with best traineddata for optimal Vietnamese OCR accuracy");
+            }
         }
     }
 
-    private void InitializeEngine()
+    private (string[] effectiveLanguages, EngineMode mode) InitializeEngine()
     {
+        var effectiveLanguages = new List<string>();
+        var useLstmOnly = true;
+        var hasAnyBest = false;
+
+        foreach (var lang in _languages)
+        {
+            var bestTrainedDataPath = Path.Combine(_tessdataPath, $"{lang}_best.traineddata");
+            var standardTrainedDataPath = Path.Combine(_tessdataPath, $"{lang}.traineddata");
+
+            if (File.Exists(bestTrainedDataPath))
+            {
+                effectiveLanguages.Add($"{lang}_best");
+                hasAnyBest = true;
+                Log.Information("Using best traineddata for language: {Lang}", lang);
+            }
+            else if (File.Exists(standardTrainedDataPath))
+            {
+                effectiveLanguages.Add(lang);
+                useLstmOnly = false;
+                Log.Warning("Best traineddata not found for {Lang}, using standard (LSTM mode disabled)", lang);
+            }
+            else
+            {
+                Log.Warning("No traineddata found for language: {Lang}", lang);
+            }
+        }
+
+        if (effectiveLanguages.Count == 0)
+        {
+            Log.Error("No traineddata files found for any language");
+            return (Array.Empty<string>(), EngineMode.Default);
+        }
+
+        var langConfig = string.Join("+", effectiveLanguages);
+        var engineMode = useLstmOnly ? EngineMode.LstmOnly : EngineMode.Default;
+
         try
         {
-            var langConfig = string.Join("+", _languages);
-            _engine = new TesseractEngine(_tessdataPath, langConfig, EngineMode.Default);
-            Log.Information("Tesseract engine initialized successfully");
+            _engine = new TesseractEngine(_tessdataPath, langConfig, engineMode);
+            Log.Information("Tesseract engine initialized with {Mode} mode, languages: {Languages}",
+                engineMode, langConfig);
+            return (effectiveLanguages.ToArray(), engineMode);
         }
         catch (Exception ex)
         {
-            Log.Error(ex, "Failed to initialize Tesseract engine");
-            _engine = null;
+            Log.Error(ex, "Failed to initialize Tesseract engine with {Mode} mode, falling back to Default mode", engineMode);
+
+            try
+            {
+                _engine = new TesseractEngine(_tessdataPath, langConfig, EngineMode.Default);
+                Log.Information("Tesseract engine initialized with Default mode (fallback), languages: {Languages}", langConfig);
+                return (effectiveLanguages.ToArray(), EngineMode.Default);
+            }
+            catch (Exception fallbackEx)
+            {
+                Log.Error(fallbackEx, "Failed to initialize Tesseract engine (fallback also failed)");
+                _engine = null;
+                return (Array.Empty<string>(), EngineMode.Default);
+            }
         }
     }
 

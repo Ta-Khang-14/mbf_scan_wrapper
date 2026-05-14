@@ -3,9 +3,9 @@
 AppName=MBF Scan Service Demo
 AppVersion=1.0.4
 AppPublisher=MBF
-DefaultDirName={userpf}\MBFScanServiceDemo
-DefaultGroupName=MBF Scan Service Demo
-OutputBaseFilename=MBFScanDemoSetup
+DefaultDirName={userpf}\MBFScanService
+DefaultGroupName=MBF Scan Service 
+OutputBaseFilename=MBFScanSetup
 Compression=lzma
 SolidCompression=yes
 
@@ -35,15 +35,15 @@ Source: "D:\Repos\mbf_scan_wrapper\mbf_scan_service\bin\Release\net8.0-windows\p
 
 [Icons]
 ; Shortcut ở Start Menu
-Name: "{group}\MBF Scan Service Demo"; Filename: "{app}\mbf_scan_service.exe"
+Name: "{group}\MBF Scan Service "; Filename: "{app}\mbf_scan_service.exe"
 
 ; Shortcut trên Desktop (nếu được chọn)
-Name: "{userdesktop}\MBF Scan Service Demo"; Filename: "{app}\mbf_scan_service.exe"; Tasks: desktopicon
+Name: "{userdesktop}\MBF Scan Service "; Filename: "{app}\mbf_scan_service.exe"; Tasks: desktopicon
 
 [Registry]
 ; Tự khởi động cùng Windows (Startup)
 Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
-    ValueType: string; ValueName: "MBFScanServiceDemo"; ValueData: """{app}\mbf_scan_service.exe"""; \
+    ValueType: string; ValueName: "MBFScanService"; ValueData: """{app}\mbf_scan_service.exe"""; \
     Flags: uninsdeletevalue
 
 [Run]

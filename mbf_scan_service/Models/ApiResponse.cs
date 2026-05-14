@@ -145,6 +145,7 @@ public class ProcessFileResponse
     public int TotalPages { get; set; }
     public long FileSize { get; set; }
     public string? OCRResult { get; set; }
+    public DocumentMetadata? OCRExtract { get; set; }
     public DateTime CreatedAt { get; set; }
     public ProcessFileSignInfo? SignInfo { get; set; }
 }
@@ -229,4 +230,11 @@ public class DiagnosticItem
     public string Message { get; set; } = string.Empty;
     public string? Details { get; set; }
     public string Suggestion { get; set; } = string.Empty;
+}
+
+public class ExtractOCRResponse
+{
+    public string FileId { get; set; } = string.Empty;
+    public DocumentMetadata? Metadata { get; set; }
+    public string? Warning { get; set; }
 }

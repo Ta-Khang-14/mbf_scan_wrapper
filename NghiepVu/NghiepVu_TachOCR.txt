@@ -1,0 +1,59 @@
+I.3.1 Nhóm Thông Tin Căn Bản
+I.3.1.1 Loại văn bản (DocType)
+Logic xử lý:
+Tìm (Keyword Match) các chuỗi in hoa đứng độc lập trên 1 dòng: BÁO CÁO, QUYẾT ĐỊNH, TỜ TRÌNH, THÔNG BÁO, NGHỊ QUYẾT → Gán tương ứng.
+Nếu chứa cụm BIÊN BẢN hoặc BÁO CÁO KẾT QUẢ dạng tiêu đề bảng biểu → Gán Biểu mẫu.
+Nếu không có từ khóa trên: Tìm cụm bắt đầu bằng V/v hoặc V/v: → Gán mặc định là Công văn.
+
+I.3.2.2 Nơi gửi (PublishUnit) 
+Vùng: Góc trên bên trái (X: 0–25%, Y: 0–15%)
+Logic xử lý: Lấy 1–3 dòng văn bản nằm ngay bên trên chuỗi có chứa từ Số: hoặc Số :. Ưu tiên lấy dòng có chữ in hoa. Dò Regex `(?i)(?:Tên\s*đơn\s*vị)(?:\s*kiểm\s*kê)?\s*:\s*(.+)`. Lấy giá trị sau dấu hai chấm.
+
+I.3..3. Số ký hiệu (Notation)
+Vùng: Góc trên bên trái (ngay dưới phần Nơi gửi)
+Regex: (?i)(?:Số|SỐ)\s*[:\.]?\s*([0-9a-zA-ZĐ/\\-]+) → Lấy Group 1
+
+I.3..4. Ngày văn bản (PublishDateStr)
+Vùng: Góc trên bên phải (nằm dưới Quốc hiệu – Tiêu ngữ)
+Regex: (?:ngày\s+\d{1,2}\s+tháng\s+\d{1,2}\s+năm\s+\d{4})
+Hậu xử lý: Tách số liệu và chuyển về định dạng chuẩn dd/MM/yyyy.
+
+I.3..5. Trích yếu (Abstract)
+Là Công văn: Tìm cụm V/v hoặc V/v:. Capture toàn bộ text nằm sau cụm này cho đến khi gặp Kính gửi hoặc khoảng trống xuống đoạn.
+Là Quyết định / Báo cáo…: Lấy nguyên văn block text (paragraph) nằm ngay liền dưới tiêu đề Loại văn bản.
+[Bổ sung thêm khi có quy tắc mới]
+
+I.3.2 Nhóm Thông Tin Mở Rộng (Không bắt buộc)
+I.3.2.1. Số đến/Số đi (Number) 
+Vùng: Nửa trên bên phải (mộc đỏ)
+Anchor: Keyword ĐẾN in hoa lớn
+Số đến: (?i)ĐẾN\s*Số\s*[:\.]?\s*(\d+)
+Ngày đến: (?i)Ngày\s*[:\.]?\s*(\d{1,2}[\s\-\/]+\d{1,2}[\s\-\/]+\d{4}) → Hậu xử lý về dd/MM/yyyy
+
+I.3.2.2. Nơi nhận (RecipientUnit)
+Vùng: Giữa trang (dưới header) hoặc góc dưới cùng bên trái
+Kính gửi: (?i)Kính\s+gửi\s*:\s*(.*) → Bóc tách cơ quan đích đến
+Nơi nhận: (?i)Nơi\s+nhận\s*:\s*(.*) → Bóc tách danh sách CC
+
+I.3.2.3 Chức vụ (SignerRole) & Người ký (Signer)
+Vùng: Góc dưới cùng bên phải
+Keyword chức danh: GIÁM ĐỐC, PHÓ GIÁM ĐỐC, TỔNG GIÁM ĐỐC, KT. TỔNG GIÁM ĐỐC, CHỦ TỊCH
+Logic: Lấy chuỗi văn bản nằm bên dưới chức danh (thường in hoa / in đậm).
+
+I.3.2.4. Độ khẩn (Urgent)
+Vùng: Lề trên, lề trái
+Match list: HỎA TỐC, THƯỢNG KHẨN, KHẨN, TUYỆT MẬT, TỐI MẬT, MẬT
+Fallback: Không khớp → trả về Bình thường
+
+I.3.3. Xử Lý Ngoại Lệ (Edge Cases & Fallbacks)
+Ngoại lệ 1: Biểu mẫu không chuẩn
+Vấn đề: Dạng bảng biểu (Mẫu số 01a-BC/TSCD). Không có Quốc hiệu, Tiêu ngữ, không cấu trúc Số: hay Nơi gửi chuẩn ở góc trên.
+Fallback Rules:
+Nơi gửi: Bỏ qua góc trên trái. Tìm regex: (?i)Tên\s+đơn\s+vị\s+kiểm\s+kê\s*:\s*(.*) hoặc (?i)Cơ\s+quan\s+quản\s+lý.*:\s*(.*)
+Ngày văn bản: Bỏ qua header. Tìm dòng đầu body chứa: (?i)Hôm\s+nay,\s+ngày\s+(\d{1,2})\s+tháng\s+(\d{1,2})\s+năm\s+(\d{4})
+Loại văn bản: Đọc dựa vào tiêu đề in hoa chính giữa bảng biểu.
+
+Ngoại lệ 2: Công văn thiếu chữ V/v
+Vấn đề: Là Tờ trình gửi Cục quản lý giá, số ký hiệu ghi QĐ (Quyết định). Không có chữ V/v, đi thẳng vào nội dung "Lời đầu tiên…".
+Fallback Rules:
+Trích yếu: Nếu logic quét V/v thất bại (trả về rỗng) đối với văn bản phân loại là Công văn → Tự động bóc toàn bộ paragraph đầu tiên (từ chữ đầu tiên sau cụm Kính gửi cho đến khi xuống đoạn mới) và gán vào ô Trích yếu.
