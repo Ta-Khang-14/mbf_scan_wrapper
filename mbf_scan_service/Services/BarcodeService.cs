@@ -318,26 +318,49 @@ public class BarcodeService
 
     public void ProcessSessionPages(List<ScanPage> pages)
     {
-        for (int i = 0; i < pages.Count; i++)
-        {
-            var page = pages[i];
-            var result = DetectBarcodeAsync(page.ImagePath).GetAwaiter().GetResult();
+        ProcessSessionPagesAsync(pages).GetAwaiter().GetResult();
+    }
 
-            if (result != null && result.Found)
+    public async Task ProcessSessionPagesAsync(List<ScanPage> pages)
+    {
+        if (pages.Count == 0) return;
+
+        Log.Information("Processing {Count} pages for barcode detection (parallel)", pages.Count);
+
+        const int maxConcurrency = 5;
+        using var semaphore = new SemaphoreSlim(maxConcurrency);
+
+        var tasks = pages.Select(async page =>
+        {
+            await semaphore.WaitAsync();
+            try
             {
-                var separatorType = GetSeparatorType(result.Value!);
-                page.IsDocSeparator = separatorType == SeparatorBarcodeType.DocSeparator;
-                page.IsBarcodeSeparator = separatorType == SeparatorBarcodeType.FileSeparator;
-                page.BarcodeValue = result.Value;
-                Log.Information("Page {Index} marked: IsDocSeparator={IsDoc}, IsFileSeparator={IsFile}, Barcode={Value}",
-                    i, page.IsDocSeparator, page.IsBarcodeSeparator, result.Value);
+                var result = await DetectBarcodeAsync(page.ImagePath);
+
+                if (result != null && result.Found)
+                {
+                    var separatorType = GetSeparatorType(result.Value!);
+                    page.IsDocSeparator = separatorType == SeparatorBarcodeType.DocSeparator;
+                    page.IsBarcodeSeparator = separatorType == SeparatorBarcodeType.FileSeparator;
+                    page.BarcodeValue = result.Value;
+                    Log.Information("Page {Index} marked: IsDocSeparator={IsDoc}, IsFileSeparator={IsFile}, Barcode={Value}",
+                        page.PageIndex, page.IsDocSeparator, page.IsBarcodeSeparator, result.Value);
+                }
+                else
+                {
+                    page.IsBarcodeSeparator = false;
+                    page.IsDocSeparator = false;
+                }
             }
-            else
+            finally
             {
-                page.IsBarcodeSeparator = false;
-                page.IsDocSeparator = false;
+                semaphore.Release();
             }
-        }
+        }).ToList();
+
+        await Task.WhenAll(tasks);
+
+        Log.Information("Barcode detection completed for {Count} pages", pages.Count);
     }
 }
 

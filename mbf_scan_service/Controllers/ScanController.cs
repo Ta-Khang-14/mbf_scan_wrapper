@@ -210,7 +210,7 @@ public static class ScanController
 
         if (_barcodeService != null && session.Pages.Count > 0)
         {
-            _barcodeService.ProcessSessionPages(session.Pages);
+            _barcodeService.ProcessSessionPagesAsync(session.Pages).GetAwaiter().GetResult();
         }
 
         var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
@@ -409,10 +409,30 @@ public static class ScanController
                             .Select(p => session.Pages[p.Index])
                             .ToList();
 
-                        var ocrPages = fileRequest.Pages
+                    // Chỉ lấy OCR cho file đầu tiên của document, và chỉ lấy page đầu + cuối
+                    var ocrPages = new List<ScanPage>();
+                    if (fileRequest.FileIndex == 0)
+                    {
+                        var ocrIndices = fileRequest.Pages
                             .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
-                            .Select(p => session.Pages[p.Index])
+                            .Select(p => p.Index)
+                            .OrderBy(i => i)
                             .ToList();
+
+                        if (ocrIndices.Count > 0)
+                        {
+                            var firstIndex = ocrIndices.First();
+                            ocrPages.Add(session.Pages[firstIndex]);
+                            if (ocrIndices.Count > 1)
+                            {
+                                var lastIndex = ocrIndices.Last();
+                                if (lastIndex != firstIndex)
+                                {
+                                    ocrPages.Add(session.Pages[lastIndex]);
+                                }
+                            }
+                        }
+                    }
 
                         if (filePages.Count == 0)
                             continue;
@@ -451,10 +471,30 @@ public static class ScanController
                         .Select(p => session.Pages[p.Index])
                         .ToList();
 
-                    var ocrPages = fileRequest.Pages
-                        .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
-                        .Select(p => session.Pages[p.Index])
-                        .ToList();
+                    // Chỉ lấy OCR cho file đầu tiên của document, và chỉ lấy page đầu + cuối
+                    var ocrPages = new List<ScanPage>();
+                    if (fileRequest.FileIndex == 0)
+                    {
+                        var ocrIndices = fileRequest.Pages
+                            .Where(p => p.IsOCR && p.Index >= 0 && p.Index < session.Pages.Count)
+                            .Select(p => p.Index)
+                            .OrderBy(i => i)
+                            .ToList();
+
+                        if (ocrIndices.Count > 0)
+                        {
+                            var firstIndex = ocrIndices.First();
+                            ocrPages.Add(session.Pages[firstIndex]);
+                            if (ocrIndices.Count > 1)
+                            {
+                                var lastIndex = ocrIndices.Last();
+                                if (lastIndex != firstIndex)
+                                {
+                                    ocrPages.Add(session.Pages[lastIndex]);
+                                }
+                            }
+                        }
+                    }
 
                     if (filePages.Count == 0)
                         continue;
