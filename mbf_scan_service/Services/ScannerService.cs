@@ -14,7 +14,6 @@ public class ScannerService : IDisposable
 {
     private readonly string _tempFolder;
     private readonly int _maxPages;
-    private readonly bool _enableDuplex;
     private readonly int _defaultDpi;
     private readonly string _defaultColorMode;
     private readonly int _scanTimeoutMs;
@@ -34,7 +33,6 @@ public class ScannerService : IDisposable
     {
         _tempFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "temp");
         _maxPages = config.DefaultMaxPages;
-        _enableDuplex = config.DefaultEnableDuplex;
         _defaultDpi = config.DefaultDPI;
         _defaultColorMode = config.DefaultColorMode;
         _scanTimeoutMs = config.ScanTimeoutSeconds * 1000;
@@ -536,8 +534,8 @@ public class ScannerService : IDisposable
             try
             {
                 _selectedScannerName = scannerName;
-                Log.Information("Selected scanner: {ScannerName} (MaxPages={MaxPages}, Duplex={Duplex})",
-                    scannerName, _maxPages, _enableDuplex);
+                Log.Information("Selected scanner: {ScannerName} (MaxPages={MaxPages})",
+                    scannerName, _maxPages);
 
                 var session = new ScanSession(scannerName);
                 session.Settings = new ScanSettings
@@ -824,14 +822,18 @@ public class ScannerService : IDisposable
             }
 
             // --- Cấu hình duplex ---
-            bool? enableDuplex = session.Settings?.EnableDuplex;
-            bool useDuplex = enableDuplex ?? _enableDuplex;
+            bool useDuplex = session.Settings?.EnableDuplex ?? false;
             try
             {
                 if (useDuplex == true)
                 {
                     ds.Capabilities.CapDuplexEnabled.SetValue(BoolType.True);
                     Log.Information("Enabled duplex scanning");
+                }
+                else
+                {
+                    ds.Capabilities.CapDuplexEnabled.SetValue(BoolType.False);
+                    Log.Information("Disabled duplex scanning");
                 }
             }
             catch (Exception ex)

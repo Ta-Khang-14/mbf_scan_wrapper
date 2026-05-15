@@ -76,7 +76,7 @@ Service hỗ trợ quét tài liệu từ máy scan, xử lý barcode, tạo PDF
 - Nếu `sessionId` trùng với session hiện tại: tiếp tục scan, thêm pages vào danh sách (index tiếp tục tăng)
 - Nếu `sessionId` khác session hiện tại: báo lỗi "Phiên scan không đúng"
 
-**Lưu ý:** `MaxPages` (mặc định 400) và `EnableDuplex` (mặc định true) được thiết lập từ server config, client không gửi được.
+**Lưu ý:** `MaxPages` (mặc định 400) được thiết lập từ server config, client không gửi được.
 
 **Response:**
 ```json
@@ -349,7 +349,7 @@ Sau khi tạo PDF, có thể thực hiện ký số trên file PDF.
 }
 ```
 
-**Lưu ý:** `MaxPages` và `EnableDuplex` chỉ thiết lập được từ server, client không gửi lên được.
+**Lưu ý:** `MaxPages` chỉ thiết lập được từ server, client không gửi lên được.
 
 ---
 

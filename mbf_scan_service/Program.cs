@@ -34,8 +34,8 @@ internal static class Program
             {
                 var json = File.ReadAllText(configPath);
                 appSettings = JsonSerializer.Deserialize<AppSettings>(json) ?? new AppSettings();
-                Log.Information("Loaded appsettings.json: MaxPages={MaxPages}, Duplex={Duplex}",
-                    appSettings.Scanner.DefaultMaxPages, appSettings.Scanner.DefaultEnableDuplex);
+                Log.Information("Loaded appsettings.json: MaxPages={MaxPages}",
+                    appSettings.Scanner.DefaultMaxPages);
             }
             else
             {

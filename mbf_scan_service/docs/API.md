@@ -162,7 +162,7 @@ Khởi tạo session và bắt đầu quét (blocking - đợi user scan xong).
 | `settings.dpi` | number | ❌ | DPI quét (mặc định: 300) |
 | `settings.colorMode` | string | ❌ | Chế độ màu: `Color`, `BW`, `Gray` (mặc định: `Color`) |
 | `settings.paperSize` | string | ❌ | Khổ giấy: `A4`, `A3`, `Letter` (mặc định: `A4`) |
-| `settings.enableDuplex` | boolean | ❌ | Bật quét hai mặt (mặc định: `true` hoặc theo cấu hình server) |
+| `settings.enableDuplex` | boolean | ✅ | Bật quét hai mặt (`true` = bật, `false` = tắt) |
 
 
 **Response:**
